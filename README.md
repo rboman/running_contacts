@@ -41,7 +41,8 @@ La deuxième brique `race_results` est maintenant en place pour ACN Timing:
 - récupération des métadonnées d’événement via Chronorace,
 - récupération du tableau de résultats via l’API Chronorace utilisée par ACN,
 - snapshot JSON brut sous `data/raw/acn_timing/`,
-- stockage SQLite local dans `data/race_results.sqlite3`.
+- stockage SQLite local dans `data/race_results.sqlite3`,
+- alias manuels de datasets pour éviter d’utiliser seulement `dataset_id`.
 
 La troisième brique `matching` est maintenant disponible:
 
@@ -49,7 +50,8 @@ La troisième brique `matching` est maintenant disponible:
 - normalisation des noms (accents, casse, ponctuation),
 - match exact puis fuzzy avec `rapidfuzz`,
 - garde-fou d’ambiguïté via un score minimal et un écart minimal entre candidats,
-- affichage terminal et export CSV.
+- affichage terminal et export CSV,
+- tri et filtrage sur les matches (`time`, `team`, `athlete`, etc.),
 - alias manuels réutilisables sur les contacts,
 - reviews manuelles pour accepter ou rejeter un match résultat par résultat.
 
@@ -96,15 +98,16 @@ Lister les datasets de résultats locaux:
 
 ```bash
 running-contacts race-results list-datasets
-running-contacts race-results list-results --dataset-id 1 --query dupont
+running-contacts race-results add-alias --dataset-id 1 --alias liege-15k-2026
+running-contacts race-results list-results --dataset liege-15k-2026 --query dupont
 ```
 
 Lancer le matching local:
 
 ```bash
-running-contacts matching run --dataset-id 1
-running-contacts matching run --dataset-id 1 --min-score 92 --min-gap 4
-running-contacts matching export-csv --dataset-id 1 --output data/exports/matches.csv
+running-contacts matching run --dataset liege-15k-2026
+running-contacts matching list --dataset liege-15k-2026 --team TEAMULIEGE --sort time
+running-contacts matching export-csv --dataset liege-15k-2026 --output data/exports/matches.csv
 ```
 
 Corriger les cas limites:
@@ -112,10 +115,10 @@ Corriger les cas limites:
 ```bash
 running-contacts contacts list --query noel
 running-contacts contacts add-alias --contact-id 42 --alias "Jean Noel"
-running-contacts matching run --dataset-id 1 --include-ambiguous --limit 20
-running-contacts matching accept --dataset-id 1 --result-id 1234 --contact-id 42
-running-contacts matching reject --dataset-id 1 --result-id 5678 --note "homonyme"
-running-contacts matching list-reviews --dataset-id 1
+running-contacts matching run --dataset liege-15k-2026 --include-ambiguous --limit 20
+running-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --contact-id 42
+running-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "homonyme"
+running-contacts matching list-reviews --dataset liege-15k-2026
 ```
 
 Lister les contacts locaux:
@@ -141,6 +144,12 @@ Guide pratique d'utilisation:
 
 ```bash
 sed -n '1,220p' USAGE.md
+```
+
+Fichier de reprise pour une future session Codex:
+
+```bash
+sed -n '1,220p' HANDOFF.md
 ```
 
 ## Roadmap courte

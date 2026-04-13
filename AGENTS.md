@@ -12,8 +12,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-Run the CLI locally with `running-contacts hello` to confirm the entry point works. Use `pytest -q` to run tests. At the moment the suite is empty, so contributors adding behavior should add tests alongside the change.
-Run the CLI locally with `running-contacts hello` to confirm the entry point works. Use `running-contacts contacts sync --credentials /path/to/credentials.json` for the Google Contacts slice, `running-contacts race-results fetch-acn --url 'https://…'` for ACN Timing ingestion, `running-contacts matching run --dataset-id 1` for local matching, `running-contacts contacts add-alias --contact-id 42 --alias 'Jean Noel'` or `running-contacts matching accept --dataset-id 1 --result-id 1234 --contact-id 42` for manual correction, `running-contacts contacts list` or `running-contacts race-results list-datasets` to inspect local caches, and `pytest -q` to run tests.
+Run the CLI locally with `running-contacts hello` to confirm the entry point works. Use `running-contacts contacts sync --credentials /path/to/credentials.json` for the Google Contacts slice, `running-contacts race-results fetch-acn --url 'https://…'` for ACN Timing ingestion, `running-contacts race-results add-alias --dataset-id 1 --alias liege-15k-2026` to create stable race selectors, `running-contacts matching run --dataset liege-15k-2026` or `running-contacts matching list --dataset liege-15k-2026 --team TEAMULIEGE --sort time` for local matching, `running-contacts contacts add-alias --contact-id 42 --alias 'Jean Noel'` or `running-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --contact-id 42` for manual correction, and `pytest -q` to run tests.
 
 ## Coding Style & Naming Conventions
 Target Python 3.11+ and prefer the standard library where practical. Follow PEP 8: 4-space indentation, `snake_case` for functions and modules, `PascalCase` for classes, and short, explicit docstrings where they add value. Keep CLI commands thin: put I/O orchestration in service modules and persistence in repository-style modules. Typing is expected for public functions, parsing code, and data models.
@@ -26,3 +25,6 @@ Recent history uses short, imperative commit subjects such as `Add gitignore and
 
 ## Data & Configuration Notes
 Treat `data/` as local workspace data. Do not commit private contact exports, credentials, OAuth tokens, generated race datasets, match exports, or manual review artifacts unless they are sanitized and intentionally added as fixtures. SQLite is the local source of truth; JSON and CSV are export/debug formats, not the primary store.
+
+## Session Continuity
+When leaving work for a later Codex session, keep `README.md`, `USAGE.md`, and `HANDOFF.md` current. `HANDOFF.md` should contain the current dataset aliases, the most useful commands, the last manual cleanup decisions, and the next recommended step so a future session can recover context quickly even without resuming the exact interactive thread.

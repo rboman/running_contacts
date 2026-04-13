@@ -2,6 +2,8 @@
 
 This file is the practical help for day-to-day use of `running_contacts`.
 
+If you come back in a later Codex session, read `HANDOFF.md` first.
+
 ## 1. Sync contacts
 
 If `credentials.json` is at the repository root:
@@ -32,6 +34,7 @@ Inspect local races:
 
 ```bash
 running-contacts race-results list-datasets
+running-contacts race-results list-aliases
 running-contacts race-results list-results --dataset 1 --query ucci
 ```
 
@@ -58,9 +61,12 @@ List matches with filters and sorting:
 ```bash
 running-contacts matching list --dataset liege-15k-2026 --sort time
 running-contacts matching list --dataset liege-15k-2026 --sort athlete
+running-contacts matching list --dataset liege-15k-2026 --sort contact
 running-contacts matching list --dataset liege-15k-2026 --team TEAMULIEGE
 running-contacts matching list --dataset liege-15k-2026 --status ambiguous
 running-contacts matching list --dataset liege-15k-2026 --name-query noel
+running-contacts matching list --dataset liege-15k-2026 --category SEH
+running-contacts matching list --dataset liege-15k-2026 --reviewed-only
 ```
 
 Export the same filtered view:
@@ -91,7 +97,33 @@ running-contacts matching list-reviews --dataset liege-15k-2026
 running-contacts matching clear-review --dataset liege-15k-2026 --result-id 1234
 ```
 
-## 5. Typical workflows
+## 5. Leave and resume later in Codex
+
+Interactive Codex sessions are resumable locally.
+
+Resume the last interactive session:
+
+```bash
+codex resume --last
+```
+
+Open the session picker:
+
+```bash
+codex resume
+```
+
+If you want the next session to keep the repository context even if you do not resume the exact same interactive session:
+
+```bash
+sed -n '1,220p' HANDOFF.md
+sed -n '1,260p' README.md
+sed -n '1,320p' USAGE.md
+```
+
+To preserve code state as well as conversation state, commit your work or at least keep the working tree unchanged before leaving.
+
+## 6. Typical workflows
 
 ### New race
 
