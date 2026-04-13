@@ -28,5 +28,6 @@ class MatchReport:
     accepted_matches: list[MatchResult] = field(default_factory=list)
     ambiguous_matches: list[MatchResult] = field(default_factory=list)
     unmatched_count: int = 0
+    reviewed_rejections_count: int = 0
     contacts_count: int = 0
     results_count: int = 0

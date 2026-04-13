@@ -65,6 +65,20 @@ class RaceResultsRepository:
 
                 CREATE INDEX IF NOT EXISTS idx_race_results_dataset_id ON race_results(dataset_id);
                 CREATE INDEX IF NOT EXISTS idx_race_results_athlete_name ON race_results(athlete_name);
+
+                CREATE TABLE IF NOT EXISTS matching_reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    dataset_id INTEGER NOT NULL,
+                    result_id INTEGER NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('accepted', 'rejected')),
+                    contact_id INTEGER,
+                    note TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(dataset_id, result_id),
+                    FOREIGN KEY(dataset_id) REFERENCES race_datasets(id) ON DELETE CASCADE,
+                    FOREIGN KEY(result_id) REFERENCES race_results(id) ON DELETE CASCADE
+                );
                 """
             )
 
@@ -271,6 +285,72 @@ class RaceResultsRepository:
         with self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
             return [dict(row) for row in rows]
+
+    def set_match_review(
+        self,
+        *,
+        dataset_id: int,
+        result_id: int,
+        status: str,
+        contact_id: int | None = None,
+        note: str | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM race_results WHERE id = ? AND dataset_id = ?",
+                (result_id, dataset_id),
+            ).fetchone()
+            if exists is None:
+                raise KeyError(f"Result {result_id} not found in dataset {dataset_id}")
+            conn.execute(
+                """
+                INSERT INTO matching_reviews (dataset_id, result_id, status, contact_id, note)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(dataset_id, result_id) DO UPDATE SET
+                    status = excluded.status,
+                    contact_id = excluded.contact_id,
+                    note = excluded.note,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (dataset_id, result_id, status, contact_id, note),
+            )
+
+    def clear_match_review(self, *, dataset_id: int, result_id: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM matching_reviews
+                WHERE dataset_id = ? AND result_id = ?
+                """,
+                (dataset_id, result_id),
+            )
+            return bool(cursor.rowcount)
+
+    def list_match_reviews(self, *, dataset_id: int) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT mr.id,
+                       mr.dataset_id,
+                       mr.result_id,
+                       rr.athlete_name,
+                       mr.status,
+                       mr.contact_id,
+                       mr.note,
+                       mr.created_at,
+                       mr.updated_at
+                FROM matching_reviews AS mr
+                JOIN race_results AS rr ON rr.id = mr.result_id
+                WHERE mr.dataset_id = ?
+                ORDER BY rr.athlete_name COLLATE NOCASE
+                """,
+                (dataset_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_match_reviews_map(self, *, dataset_id: int) -> dict[int, dict[str, Any]]:
+        reviews = self.list_match_reviews(dataset_id=dataset_id)
+        return {int(review["result_id"]): review for review in reviews}
 
     def export_dataset(self, *, dataset_id: int) -> dict[str, Any]:
         with self._connect() as conn:

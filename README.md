@@ -50,6 +50,8 @@ La troisième brique `matching` est maintenant disponible:
 - match exact puis fuzzy avec `rapidfuzz`,
 - garde-fou d’ambiguïté via un score minimal et un écart minimal entre candidats,
 - affichage terminal et export CSV.
+- alias manuels réutilisables sur les contacts,
+- reviews manuelles pour accepter ou rejeter un match résultat par résultat.
 
 ## Installation
 
@@ -105,6 +107,17 @@ running-contacts matching run --dataset-id 1 --min-score 92 --min-gap 4
 running-contacts matching export-csv --dataset-id 1 --output data/exports/matches.csv
 ```
 
+Corriger les cas limites:
+
+```bash
+running-contacts contacts list --query noel
+running-contacts contacts add-alias --contact-id 42 --alias "Jean Noel"
+running-contacts matching run --dataset-id 1 --include-ambiguous --limit 20
+running-contacts matching accept --dataset-id 1 --result-id 1234 --contact-id 42
+running-contacts matching reject --dataset-id 1 --result-id 5678 --note "homonyme"
+running-contacts matching list-reviews --dataset-id 1
+```
+
 Lister les contacts locaux:
 
 ```bash
@@ -127,6 +140,6 @@ pytest -q
 ## Roadmap courte
 
 1. Stabiliser la brique `contacts`.
-2. Ajouter des alias manuels de contacts pour corriger les faux négatifs connus.
-3. Affiner le matching avec revue manuelle ou statuts de validation.
+2. Ajouter des alias manuels ciblés pour corriger les faux négatifs connus.
+3. Introduire éventuellement une petite interface locale de revue des matches.
 4. Étendre `race_results` à d’autres providers si nécessaire.

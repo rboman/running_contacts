@@ -91,3 +91,24 @@ def test_write_export_json_includes_methods(tmp_path: Path) -> None:
 
     assert payload[0]["display_name"] == "Alice Example"
     assert payload[0]["methods"][0]["value"] == "alice@example.com"
+
+
+def test_aliases_can_be_added_listed_and_removed(tmp_path: Path) -> None:
+    repository = ContactsRepository(tmp_path / "contacts.sqlite3")
+    repository.initialize()
+
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[make_contact("people/1", "Alice Example", email="alice@example.com")],
+        sync_run_id=sync_run_id,
+    )
+
+    contact = repository.list_contacts()[0]
+    repository.add_alias(contact_id=contact["id"], alias_text="Alice Ex")
+    aliases = repository.list_aliases(contact_id=contact["id"])
+
+    assert aliases[0]["alias_text"] == "Alice Ex"
+    assert repository.get_contact(contact_id=contact["id"])["aliases"] == ["Alice Ex"]
+    assert repository.remove_alias(contact_id=contact["id"], alias_text="Alice Ex") is True

@@ -78,3 +78,24 @@ def test_export_dataset_returns_metadata_and_results(tmp_path: Path) -> None:
     assert payload["event_title"] == "Demo Race"
     assert payload["metadata"]["settings"]["Live"] is True
     assert payload["results"][0]["athlete_name"] == "Alice Runner"
+
+
+def test_match_reviews_can_be_stored_and_cleared(tmp_path: Path) -> None:
+    repository = RaceResultsRepository(tmp_path / "race_results.sqlite3")
+    repository.initialize()
+
+    dataset_id = repository.save_dataset(dataset=make_dataset(), results=make_results())
+    result_id = repository.list_results(dataset_id=dataset_id, limit=1)[0]["id"]
+
+    repository.set_match_review(
+        dataset_id=dataset_id,
+        result_id=result_id,
+        status="accepted",
+        contact_id=12,
+        note="manual",
+    )
+    reviews = repository.list_match_reviews(dataset_id=dataset_id)
+
+    assert reviews[0]["status"] == "accepted"
+    assert reviews[0]["contact_id"] == 12
+    assert repository.clear_match_review(dataset_id=dataset_id, result_id=result_id) is True

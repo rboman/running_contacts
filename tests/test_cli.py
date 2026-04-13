@@ -5,7 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from running_contacts.cli import app
-from running_contacts.contacts.models import SyncStats
+from running_contacts.contacts.models import ContactRecord, SyncStats
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.models import MatchReport, MatchResult
 from running_contacts.race_results.models import RaceFetchStats
@@ -175,3 +175,41 @@ def test_matching_run_command(monkeypatch: object) -> None:
     assert result.exit_code == 0
     assert "1 accepted matches" in result.stdout
     assert "Jean Dupont" in result.stdout
+
+
+def test_contacts_add_alias_command(tmp_path: Path) -> None:
+    db_path = tmp_path / "contacts.sqlite3"
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source_contact_id="people/1",
+                display_name="Alice Example",
+                raw_payload={"resourceName": "people/1"},
+            )
+        ],
+        sync_run_id=sync_run_id,
+    )
+
+    contact_id = repository.list_contacts()[0]["id"]
+    result = runner.invoke(
+        app,
+        [
+            "contacts",
+            "add-alias",
+            "--contact-id",
+            str(contact_id),
+            "--alias",
+            "Alice Ex",
+            "--db-path",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Added alias" in result.stdout
+    assert repository.get_contact(contact_id=contact_id)["aliases"] == ["Alice Ex"]

@@ -6,6 +6,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from running_contacts.matching.normalization import normalize_person_name
+
 from .models import ContactRecord, SyncStats
 
 
@@ -62,6 +64,16 @@ class ContactsRepository:
                     contacts_written INTEGER NOT NULL DEFAULT 0,
                     contacts_deactivated INTEGER NOT NULL DEFAULT 0,
                     error_message TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS contact_aliases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contact_id INTEGER NOT NULL,
+                    alias_text TEXT NOT NULL,
+                    normalized_alias TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(contact_id, normalized_alias),
+                    FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE
                 );
                 """
             )
@@ -204,6 +216,84 @@ class ContactsRepository:
         )
         return output_path
 
+    def get_contact(self, *, contact_id: int) -> dict[str, Any]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT c.id,
+                       c.source,
+                       c.source_account,
+                       c.source_contact_id,
+                       c.display_name,
+                       c.given_name,
+                       c.family_name,
+                       c.nickname,
+                       c.organization,
+                       c.notes,
+                       c.active,
+                       c.updated_at
+                FROM contacts AS c
+                WHERE c.id = ?
+                """,
+                (contact_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Contact {contact_id} not found")
+            return self._row_to_contact_summary(conn, contact_id, dict(row))
+
+    def add_alias(self, *, contact_id: int, alias_text: str) -> None:
+        normalized_alias = normalize_person_name(alias_text)
+        if not normalized_alias:
+            raise ValueError("Alias text cannot be empty")
+
+        with self._connect() as conn:
+            exists = conn.execute("SELECT 1 FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+            if exists is None:
+                raise KeyError(f"Contact {contact_id} not found")
+            conn.execute(
+                """
+                INSERT INTO contact_aliases (contact_id, alias_text, normalized_alias)
+                VALUES (?, ?, ?)
+                ON CONFLICT(contact_id, normalized_alias) DO UPDATE SET
+                    alias_text = excluded.alias_text
+                """,
+                (contact_id, alias_text.strip(), normalized_alias),
+            )
+
+    def remove_alias(self, *, contact_id: int, alias_text: str) -> bool:
+        normalized_alias = normalize_person_name(alias_text)
+        if not normalized_alias:
+            return False
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM contact_aliases
+                WHERE contact_id = ? AND normalized_alias = ?
+                """,
+                (contact_id, normalized_alias),
+            )
+            return bool(cursor.rowcount)
+
+    def list_aliases(self, *, contact_id: int | None = None) -> list[dict[str, Any]]:
+        sql = """
+            SELECT a.id,
+                   a.contact_id,
+                   c.display_name AS contact_name,
+                   a.alias_text,
+                   a.normalized_alias,
+                   a.created_at
+            FROM contact_aliases AS a
+            JOIN contacts AS c ON c.id = a.contact_id
+        """
+        params: list[Any] = []
+        if contact_id is not None:
+            sql += " WHERE a.contact_id = ?"
+            params.append(contact_id)
+        sql += " ORDER BY c.display_name COLLATE NOCASE, a.alias_text COLLATE NOCASE"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+            return [dict(row) for row in rows]
+
     def _upsert_contact(self, conn: sqlite3.Connection, *, contact: ContactRecord, sync_run_id: int) -> None:
         raw_json = json.dumps(contact.raw_payload, ensure_ascii=False, sort_keys=True)
         cursor = conn.execute(
@@ -292,8 +382,18 @@ class ContactsRepository:
             """,
             (contact_id,),
         ).fetchall()
+        aliases = conn.execute(
+            """
+            SELECT alias_text
+            FROM contact_aliases
+            WHERE contact_id = ?
+            ORDER BY alias_text COLLATE NOCASE
+            """,
+            (contact_id,),
+        ).fetchall()
         row["active"] = bool(row["active"])
         row["methods"] = [dict(method) for method in methods]
+        row["aliases"] = [alias["alias_text"] for alias in aliases]
         return row
 
     def _connect(self) -> sqlite3.Connection:

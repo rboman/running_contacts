@@ -165,3 +165,33 @@ def test_match_dataset_marks_close_scores_as_ambiguous(tmp_path: Path) -> None:
     assert len(report.accepted_matches) == 1
     assert len(report.ambiguous_matches) == 1
     assert report.ambiguous_matches[0].athlete_name == "Alice Marten"
+
+
+def test_match_dataset_applies_aliases_and_reviews(tmp_path: Path) -> None:
+    contacts_db_path = tmp_path / "contacts.sqlite3"
+    results_db_path = tmp_path / "race_results.sqlite3"
+    _seed_contacts(contacts_db_path)
+    dataset_id = _seed_results(results_db_path)
+
+    contacts_repository = ContactsRepository(contacts_db_path)
+    contacts_repository.initialize()
+    contacts_repository.add_alias(contact_id=2, alias_text="Alice Marten")
+
+    results_repository = RaceResultsRepository(results_db_path)
+    results_repository.initialize()
+    unknown_result = results_repository.list_results(dataset_id=dataset_id, query="Unknown", limit=1)[0]
+    results_repository.set_match_review(
+        dataset_id=dataset_id,
+        result_id=unknown_result["id"],
+        status="rejected",
+        note="not in contacts",
+    )
+
+    report = match_dataset(
+        contacts_db_path=contacts_db_path,
+        results_db_path=results_db_path,
+        dataset_id=dataset_id,
+    )
+
+    assert any(match.athlete_name == "Alice Marten" and match.match_method == "exact" for match in report.accepted_matches)
+    assert report.reviewed_rejections_count == 1

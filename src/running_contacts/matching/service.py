@@ -216,13 +216,46 @@ def match_dataset(
     results_repository.initialize()
     dataset = results_repository.get_dataset(dataset_id=dataset_id)
     results = results_repository.list_results(dataset_id=dataset_id, limit=None)
+    reviews_by_result_id = results_repository.get_match_reviews_map(dataset_id=dataset_id)
 
     matcher = _MatcherIndex(contacts)
+    contacts_by_id = {int(contact["id"]): contact for contact in contacts}
     accepted_matches: list[MatchResult] = []
     ambiguous_matches: list[MatchResult] = []
     unmatched_count = 0
+    reviewed_rejections_count = 0
 
     for result in results:
+        review = reviews_by_result_id.get(int(result["id"]))
+        if review:
+            if review["status"] == "accepted":
+                contact = contacts_by_id.get(int(review["contact_id"]))
+                if contact is not None:
+                    accepted_matches.append(
+                        MatchResult(
+                            status="accepted",
+                            match_method="review",
+                            score=100.0,
+                            matched_alias=None,
+                            confidence_gap=100.0,
+                            result_id=int(result["id"]),
+                            dataset_id=int(result["dataset_id"]),
+                            athlete_name=str(result["athlete_name"]),
+                            position_text=result.get("position_text"),
+                            bib=result.get("bib"),
+                            finish_time=result.get("finish_time"),
+                            team=result.get("team"),
+                            category=result.get("category"),
+                            contact_id=int(contact["id"]),
+                            contact_name=str(contact["display_name"]),
+                        )
+                    )
+                    continue
+            elif review["status"] == "rejected":
+                unmatched_count += 1
+                reviewed_rejections_count += 1
+                continue
+
         match = matcher.match_name(result, min_score=min_score, min_gap=min_gap)
         if match is None:
             unmatched_count += 1
@@ -239,6 +272,7 @@ def match_dataset(
         accepted_matches=accepted_matches,
         ambiguous_matches=ambiguous_matches,
         unmatched_count=unmatched_count,
+        reviewed_rejections_count=reviewed_rejections_count,
         contacts_count=matcher.contacts_count,
         results_count=len(results),
     )
@@ -291,6 +325,7 @@ def _build_contact_aliases(contact: dict) -> list[str]:
         _join_name(contact.get("family_name"), contact.get("given_name")),
         contact.get("nickname"),
         _join_name(contact.get("nickname"), contact.get("family_name")),
+        *contact.get("aliases", []),
     ):
         if isinstance(value, str) and value.strip() and value.strip() not in aliases:
             aliases.append(value.strip())

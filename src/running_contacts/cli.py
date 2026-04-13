@@ -110,10 +110,13 @@ def contacts_list(
 
     for contact in contacts:
         methods = ", ".join(method["value"] for method in contact["methods"])
+        aliases = ", ".join(contact["aliases"])
         status = "" if contact["active"] else " [inactive]"
-        line = f"{contact['display_name']}{status}"
+        line = f"{contact['id']}: {contact['display_name']}{status}"
         if methods:
             line = f"{line} - {methods}"
+        if aliases:
+            line = f"{line} - aliases: {aliases}"
         typer.echo(line)
 
 
@@ -143,6 +146,67 @@ def contacts_export_json(
         include_inactive=include_inactive,
     )
     typer.echo(f"Exported contacts to {export_path}")
+
+
+@contacts_app.command("add-alias")
+def contacts_add_alias(
+    contact_id: int = typer.Option(..., "--contact-id", help="Identifiant local du contact."),
+    alias_text: str = typer.Option(..., "--alias", help="Alias a ajouter pour ce contact."),
+    db_path: Path = typer.Option(
+        DEFAULT_DB_PATH,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+) -> None:
+    """Ajoute un alias manuel a un contact local."""
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    repository.add_alias(contact_id=contact_id, alias_text=alias_text)
+    typer.echo(f"Added alias to contact {contact_id}: {alias_text}")
+
+
+@contacts_app.command("remove-alias")
+def contacts_remove_alias(
+    contact_id: int = typer.Option(..., "--contact-id", help="Identifiant local du contact."),
+    alias_text: str = typer.Option(..., "--alias", help="Alias a supprimer."),
+    db_path: Path = typer.Option(
+        DEFAULT_DB_PATH,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+) -> None:
+    """Supprime un alias manuel d'un contact local."""
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    removed = repository.remove_alias(contact_id=contact_id, alias_text=alias_text)
+    if not removed:
+        typer.echo("Alias not found.")
+        raise typer.Exit(code=1)
+    typer.echo(f"Removed alias from contact {contact_id}: {alias_text}")
+
+
+@contacts_app.command("list-aliases")
+def contacts_list_aliases(
+    contact_id: int | None = typer.Option(
+        None,
+        "--contact-id",
+        help="Limiter l'affichage a un contact.",
+    ),
+    db_path: Path = typer.Option(
+        DEFAULT_DB_PATH,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+) -> None:
+    """Liste les alias manuels enregistres."""
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    aliases = repository.list_aliases(contact_id=contact_id)
+    if not aliases:
+        typer.echo("No aliases found.")
+        raise typer.Exit(code=0)
+    for alias in aliases:
+        typer.echo(f"{alias['contact_id']}: {alias['contact_name']} -> {alias['alias_text']}")
 
 
 app.add_typer(contacts_app, name="contacts")
@@ -235,6 +299,7 @@ def race_results_list_results(
 
     for result in results:
         parts = [
+            f"#{result['id']}",
             result["position_text"] or "-",
             result["athlete_name"],
         ]
@@ -337,6 +402,8 @@ def matching_run(
         f"{report.unmatched_count} unmatched "
         f"across {report.results_count} results and {report.contacts_count} contacts."
     )
+    if report.reviewed_rejections_count:
+        typer.echo(f"{report.reviewed_rejections_count} results were explicitly rejected by review.")
 
     displayed = report.accepted_matches[:limit] if limit else report.accepted_matches
     if not displayed:
@@ -344,10 +411,11 @@ def matching_run(
     else:
         for match in displayed:
             parts = [
+                f"#{match.result_id}",
                 match.position_text or "-",
                 match.athlete_name,
                 "->",
-                match.contact_name or "?",
+                f"{match.contact_name or '?'} (contact {match.contact_id})" if match.contact_id else (match.contact_name or "?"),
                 f"{match.match_method}:{match.score:.1f}",
             ]
             if match.finish_time:
@@ -361,7 +429,9 @@ def matching_run(
         ambiguous_displayed = report.ambiguous_matches[:limit] if limit else report.ambiguous_matches
         for match in ambiguous_displayed:
             typer.echo(
-                f"{match.athlete_name} -> {match.contact_name or '?'} "
+                f"result {match.result_id}: {match.athlete_name} -> "
+                f"{match.contact_name or '?'}"
+                f"{f' (contact {match.contact_id})' if match.contact_id else ''} "
                 f"(score {match.score:.1f}, gap {match.confidence_gap:.1f})"
             )
 
@@ -415,6 +485,110 @@ def matching_export_csv(
     typer.echo(
         f"Exported {len(report.accepted_matches)} matches to {export_path}"
     )
+
+
+@matching_app.command("accept")
+def matching_accept(
+    dataset_id: int = typer.Option(..., "--dataset-id", help="Identifiant local du dataset."),
+    result_id: int = typer.Option(..., "--result-id", help="Identifiant local du resultat."),
+    contact_id: int = typer.Option(..., "--contact-id", help="Identifiant local du contact."),
+    note: str | None = typer.Option(None, "--note", help="Note libre de revue."),
+    contacts_db_path: Path = typer.Option(
+        DEFAULT_DB_PATH,
+        "--contacts-db-path",
+        help="Chemin vers la base SQLite des contacts.",
+    ),
+    results_db_path: Path = typer.Option(
+        DEFAULT_RACE_DB_PATH,
+        "--results-db-path",
+        help="Chemin vers la base SQLite des resultats.",
+    ),
+) -> None:
+    """Force un match manuel entre un resultat et un contact."""
+    contacts_repository = ContactsRepository(contacts_db_path)
+    contacts_repository.initialize()
+    contact = contacts_repository.get_contact(contact_id=contact_id)
+
+    results_repository = RaceResultsRepository(results_db_path)
+    results_repository.initialize()
+    results_repository.set_match_review(
+        dataset_id=dataset_id,
+        result_id=result_id,
+        status="accepted",
+        contact_id=contact_id,
+        note=note,
+    )
+    typer.echo(
+        f"Accepted review for result {result_id}: contact {contact['id']} ({contact['display_name']})"
+    )
+
+
+@matching_app.command("reject")
+def matching_reject(
+    dataset_id: int = typer.Option(..., "--dataset-id", help="Identifiant local du dataset."),
+    result_id: int = typer.Option(..., "--result-id", help="Identifiant local du resultat."),
+    note: str | None = typer.Option(None, "--note", help="Note libre de revue."),
+    results_db_path: Path = typer.Option(
+        DEFAULT_RACE_DB_PATH,
+        "--results-db-path",
+        help="Chemin vers la base SQLite des resultats.",
+    ),
+) -> None:
+    """Marque un resultat comme non-match manuel."""
+    results_repository = RaceResultsRepository(results_db_path)
+    results_repository.initialize()
+    results_repository.set_match_review(
+        dataset_id=dataset_id,
+        result_id=result_id,
+        status="rejected",
+        contact_id=None,
+        note=note,
+    )
+    typer.echo(f"Rejected review for result {result_id}")
+
+
+@matching_app.command("clear-review")
+def matching_clear_review(
+    dataset_id: int = typer.Option(..., "--dataset-id", help="Identifiant local du dataset."),
+    result_id: int = typer.Option(..., "--result-id", help="Identifiant local du resultat."),
+    results_db_path: Path = typer.Option(
+        DEFAULT_RACE_DB_PATH,
+        "--results-db-path",
+        help="Chemin vers la base SQLite des resultats.",
+    ),
+) -> None:
+    """Supprime une revue manuelle sur un resultat."""
+    results_repository = RaceResultsRepository(results_db_path)
+    results_repository.initialize()
+    cleared = results_repository.clear_match_review(dataset_id=dataset_id, result_id=result_id)
+    if not cleared:
+        typer.echo("Review not found.")
+        raise typer.Exit(code=1)
+    typer.echo(f"Cleared review for result {result_id}")
+
+
+@matching_app.command("list-reviews")
+def matching_list_reviews(
+    dataset_id: int = typer.Option(..., "--dataset-id", help="Identifiant local du dataset."),
+    results_db_path: Path = typer.Option(
+        DEFAULT_RACE_DB_PATH,
+        "--results-db-path",
+        help="Chemin vers la base SQLite des resultats.",
+    ),
+) -> None:
+    """Liste les revues manuelles enregistrees."""
+    results_repository = RaceResultsRepository(results_db_path)
+    results_repository.initialize()
+    reviews = results_repository.list_match_reviews(dataset_id=dataset_id)
+    if not reviews:
+        typer.echo("No reviews found.")
+        raise typer.Exit(code=0)
+    for review in reviews:
+        suffix = f" -> contact {review['contact_id']}" if review["contact_id"] else ""
+        note = f" [{review['note']}]" if review["note"] else ""
+        typer.echo(
+            f"result {review['result_id']}: {review['athlete_name']} - {review['status']}{suffix}{note}"
+        )
 
 
 app.add_typer(matching_app, name="matching")
