@@ -1,0 +1,33 @@
+# Environnement virtuel
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# Tests / cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE / éditeurs
+.vscode/
+.idea/
+
+# Données locales
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/raw/
+
+# Secrets / config locale
+.env
+credentials.json
+token.json
+
