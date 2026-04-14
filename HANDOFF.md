@@ -44,6 +44,7 @@ Supported key:
 
 ```toml
 data_dir = "/absolute/path/to/running_contacts_data"
+credentials_path = "/absolute/path/to/credentials.json"
 ```
 
 All default paths now derive from that directory:
@@ -59,6 +60,12 @@ Recommended shared usage:
 1. point `data_dir` to a Dropbox-backed folder on each machine
 2. use only one machine at a time on the shared SQLite files
 3. wait for Dropbox sync to finish before switching machines
+
+Useful config inspection command:
+
+```bash
+running-contacts config show
+```
 
 ## Important Local Selectors
 

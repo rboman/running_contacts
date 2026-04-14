@@ -25,6 +25,16 @@ def test_hello_creates_config_file() -> None:
     assert config_path.exists()
 
 
+def test_config_show_outputs_resolved_paths() -> None:
+    result = runner.invoke(app, ["config", "show"])
+
+    assert result.exit_code == 0
+    assert "config_path:" in result.stdout
+    assert "data_dir:" in result.stdout
+    assert "contacts_db:" in result.stdout
+    assert "credentials_path:" in result.stdout
+
+
 def test_contacts_list_uses_configured_default_data_dir() -> None:
     app_data_dir = Path.cwd() / "data"
     db_path = app_data_dir / "contacts.sqlite3"
@@ -107,6 +117,26 @@ def test_contacts_sync_uses_default_credentials_file(monkeypatch: object, tmp_pa
 
     assert result.exit_code == 0
     assert captured["credentials_path"] == Path("credentials.json")
+
+
+def test_contacts_sync_uses_configured_credentials_file(monkeypatch: object, tmp_path: Path) -> None:
+    from running_contacts.config import write_app_paths
+
+    credentials_path = tmp_path / "shared-credentials.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+    captured: dict[str, Path] = {}
+
+    def fake_sync_google_contacts(**kwargs: object) -> SyncStats:
+        captured["credentials_path"] = kwargs["credentials_path"]  # type: ignore[index]
+        return SyncStats(fetched_count=1, written_count=1, deactivated_count=0, sync_run_id=1)
+
+    monkeypatch.setattr("running_contacts.cli.sync_google_contacts", fake_sync_google_contacts)
+    write_app_paths(data_dir=tmp_path / "shared-data", credentials_path=credentials_path)
+
+    result = runner.invoke(app, ["contacts", "sync"])
+
+    assert result.exit_code == 0
+    assert captured["credentials_path"] == credentials_path
 
 
 def test_contacts_sync_requires_credentials_when_default_is_missing(monkeypatch: object, tmp_path: Path) -> None:

@@ -18,6 +18,7 @@ app = typer.Typer()
 contacts_app = typer.Typer(help="Synchroniser et interroger les contacts locaux.")
 race_results_app = typer.Typer(help="Recuperer et interroger les resultats de course locaux.")
 matching_app = typer.Typer(help="Croiser les contacts locaux avec des resultats de course locaux.")
+config_app = typer.Typer(help="Inspecter la configuration locale et les chemins resolves.")
 
 DEFAULT_CREDENTIALS_PATH = Path("credentials.json")
 SORT_OPTIONS = ["position", "time", "athlete", "contact", "team", "score"]
@@ -33,6 +34,25 @@ def main() -> None:
 def hello() -> None:
     """Teste que la CLI fonctionne."""
     print("running_contacts OK")
+
+
+@config_app.command("show")
+def config_show() -> None:
+    """Affiche la configuration locale et les chemins resolus."""
+    app_paths = _app_paths()
+    typer.echo(f"config_path: {app_paths.config_path}")
+    typer.echo(f"data_dir: {app_paths.data_dir}")
+    typer.echo(f"contacts_db: {app_paths.contacts_db}")
+    typer.echo(f"race_results_db: {app_paths.race_results_db}")
+    typer.echo(f"google_token: {app_paths.google_token}")
+    typer.echo(f"raw_acn_dir: {app_paths.raw_acn_dir}")
+    typer.echo(f"contacts_export_json: {app_paths.contacts_export_json}")
+    typer.echo(f"race_results_export_json: {app_paths.race_results_export_json}")
+    typer.echo(f"matches_export_csv: {app_paths.matches_export_csv}")
+    if app_paths.credentials_path is not None:
+        typer.echo(f"credentials_path: {app_paths.credentials_path}")
+    else:
+        typer.echo(f"credentials_path: {DEFAULT_CREDENTIALS_PATH} (fallback)")
 
 
 def _resolve_dataset_id(
@@ -95,7 +115,7 @@ def contacts_sync(
     app_paths = _app_paths()
     resolved_db_path = db_path or app_paths.contacts_db
     resolved_token_path = token_path or app_paths.google_token
-    resolved_credentials_path = credentials_path or DEFAULT_CREDENTIALS_PATH
+    resolved_credentials_path = credentials_path or app_paths.credentials_path or DEFAULT_CREDENTIALS_PATH
     if not resolved_credentials_path.exists() or not resolved_credentials_path.is_file():
         raise typer.BadParameter(
             "Google OAuth credentials file not found. "
@@ -247,6 +267,7 @@ def contacts_list_aliases(
 
 
 app.add_typer(contacts_app, name="contacts")
+app.add_typer(config_app, name="config")
 
 
 @race_results_app.command("fetch-acn")

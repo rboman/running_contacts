@@ -10,6 +10,7 @@ import tomllib
 @dataclass(slots=True, frozen=True)
 class AppPaths:
     data_dir: Path
+    credentials_path: Path | None = None
     config_path: Path | None = None
 
     @property
@@ -47,11 +48,7 @@ class AppPaths:
 
 def get_app_paths() -> AppPaths:
     config_path = get_config_path()
-    ensure_config_exists(config_path=config_path)
-    return AppPaths(
-        data_dir=load_data_dir(config_path=config_path),
-        config_path=config_path,
-    )
+    return load_app_paths(config_path=config_path)
 
 
 def build_app_paths(*, data_dir: Path, config_path: Path | None = None) -> AppPaths:
@@ -80,18 +77,68 @@ def ensure_config_exists(*, config_path: Path | None = None) -> Path:
     return resolved_config_path
 
 
-def load_data_dir(*, config_path: Path | None = None) -> Path:
+def load_app_paths(*, config_path: Path | None = None) -> AppPaths:
+    resolved_config_path = ensure_config_exists(config_path=config_path)
+    payload = load_config_payload(config_path=resolved_config_path)
+    return AppPaths(
+        data_dir=_resolve_configured_path(payload.get("data_dir"), config_path=resolved_config_path),
+        credentials_path=_resolve_optional_path(
+            payload.get("credentials_path"),
+            config_path=resolved_config_path,
+        ),
+        config_path=resolved_config_path,
+    )
+
+
+def load_config_payload(*, config_path: Path | None = None) -> dict[str, object]:
     resolved_config_path = ensure_config_exists(config_path=config_path)
     payload = tomllib.loads(resolved_config_path.read_text(encoding="utf-8"))
-    raw_data_dir = payload.get("data_dir")
-    if not isinstance(raw_data_dir, str) or not raw_data_dir.strip():
-        raise RuntimeError(f"Invalid config file: missing or invalid data_dir in {resolved_config_path}")
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Invalid config file: expected a TOML table in {resolved_config_path}")
+    return payload
 
-    data_dir = Path(raw_data_dir).expanduser()
-    if not data_dir.is_absolute():
-        data_dir = (resolved_config_path.parent / data_dir).resolve()
-    return data_dir.resolve()
+
+def load_data_dir(*, config_path: Path | None = None) -> Path:
+    return load_app_paths(config_path=config_path).data_dir
+
+
+def write_app_paths(
+    *,
+    data_dir: Path,
+    credentials_path: Path | None = None,
+    config_path: Path | None = None,
+) -> AppPaths:
+    resolved_config_path = config_path or get_config_path()
+    resolved_config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = [f"data_dir = {json.dumps(str(data_dir.resolve()))}\n"]
+    if credentials_path is not None:
+        lines.append(f"credentials_path = {json.dumps(str(credentials_path.resolve()))}\n")
+
+    resolved_config_path.write_text("".join(lines), encoding="utf-8")
+    return load_app_paths(config_path=resolved_config_path)
 
 
 def default_data_dir() -> Path:
     return (Path.cwd() / "data").resolve()
+
+
+def _resolve_configured_path(raw_value: object, *, config_path: Path) -> Path:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise RuntimeError(f"Invalid config file: missing or invalid data_dir in {config_path}")
+    return _resolve_path_string(raw_value, config_path=config_path)
+
+
+def _resolve_optional_path(raw_value: object, *, config_path: Path) -> Path | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        raise RuntimeError(f"Invalid config file: invalid path value in {config_path}")
+    return _resolve_path_string(raw_value, config_path=config_path)
+
+
+def _resolve_path_string(raw_value: str, *, config_path: Path) -> Path:
+    path = Path(raw_value).expanduser()
+    if not path.is_absolute():
+        path = (config_path.parent / path).resolve()
+    return path.resolve()

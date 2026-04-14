@@ -81,6 +81,7 @@ Format:
 
 ```toml
 data_dir = "/chemin/absolu/vers/running_contacts_data"
+credentials_path = "/chemin/absolu/vers/credentials.json"
 ```
 
 Tout l'état local dérive ensuite de ce répertoire:
@@ -92,6 +93,12 @@ Tout l'état local dérive ensuite de ce répertoire:
 - `exports/`
 
 Cela permet de pointer vers un dossier Dropbox partagé entre machines, à condition de n'utiliser qu'une seule machine à la fois sur ces bases SQLite.
+
+Pour inspecter la config et les chemins résolus:
+
+```bash
+running-contacts config show
+```
 
 Pour installer aussi la GUI desktop PySide6:
 
@@ -197,6 +204,7 @@ La GUI actuelle reste volontairement simple, mais elle est déjà utile au quoti
 - ajout d'alias de dataset,
 - export JSON des contacts,
 - filtrage local du matching et export CSV,
+- visualisation et édition de la configuration locale,
 - sync Google et reviews manuelles encore laissées à la CLI.
 
 ## Migration vers Dropbox

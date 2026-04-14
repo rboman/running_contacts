@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from running_contacts.config import AppPaths, build_app_paths, get_app_paths
+from running_contacts.config import AppPaths, build_app_paths, get_app_paths, write_app_paths
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.models import MatchReport, MatchResult
 from running_contacts.matching.service import (
@@ -33,6 +34,7 @@ from running_contacts.race_results.service import fetch_acn_results
 from running_contacts.race_results.storage import RaceResultsRepository
 
 from .state import GuiState, MatchingFilters
+from .config_dialog import ConfigDialog
 from .table_presenter import TablePresenter
 
 
@@ -69,6 +71,9 @@ class MainWindow(QMainWindow):
         self.matching_team_input = QLineEdit()
         self.matching_name_query_input = QLineEdit()
         self.matching_category_input = QLineEdit()
+        self.config_path_display = QLineEdit()
+        self.data_dir_display = QLineEdit()
+        self.credentials_path_display = QLineEdit()
 
         self.matching_status_combo = QComboBox()
         self.matching_status_combo.addItems(list(STATUS_OPTIONS))
@@ -84,6 +89,8 @@ class MainWindow(QMainWindow):
         self.add_alias_button = QPushButton("Add alias")
         self.run_matching_button = QPushButton("Run matching")
         self.export_matches_button = QPushButton("Export CSV")
+        self.edit_config_button = QPushButton("Edit config")
+        self.reload_config_button = QPushButton("Reload config")
 
         self.table = QTableWidget()
         self.table.setObjectName("central_table")
@@ -99,6 +106,7 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(self._build_contacts_section())
         controls_layout.addWidget(self._build_race_results_section())
         controls_layout.addWidget(self._build_matching_section())
+        controls_layout.addWidget(self._build_config_section())
         controls_layout.addStretch(1)
 
         layout.addLayout(controls_layout, stretch=0)
@@ -117,6 +125,8 @@ class MainWindow(QMainWindow):
         self.add_alias_button.clicked.connect(self.add_dataset_alias)
         self.run_matching_button.clicked.connect(self.run_matching)
         self.export_matches_button.clicked.connect(self.export_matches_csv)
+        self.edit_config_button.clicked.connect(self.edit_config)
+        self.reload_config_button.clicked.connect(self.reload_config)
         self.table.itemSelectionChanged.connect(self._handle_table_selection_changed)
         self.matching_status_combo.currentTextChanged.connect(self.apply_matching_filters)
         self.matching_sort_combo.currentTextChanged.connect(self.apply_matching_filters)
@@ -124,6 +134,7 @@ class MainWindow(QMainWindow):
         self.matching_name_query_input.textChanged.connect(self.apply_matching_filters)
         self.matching_category_input.textChanged.connect(self.apply_matching_filters)
         self.matching_reviewed_only_checkbox.checkStateChanged.connect(self.apply_matching_filters)
+        self._refresh_config_summary()
 
     def _build_contacts_section(self) -> QGroupBox:
         section = QGroupBox("Contacts")
@@ -177,6 +188,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.matching_reviewed_only_checkbox)
         layout.addWidget(self.run_matching_button)
         layout.addWidget(self.export_matches_button)
+        return section
+
+    def _build_config_section(self) -> QGroupBox:
+        section = QGroupBox("Config")
+        section.setObjectName("config_section")
+        layout = QVBoxLayout(section)
+
+        self.config_path_display.setReadOnly(True)
+        self.data_dir_display.setReadOnly(True)
+        self.credentials_path_display.setReadOnly(True)
+
+        layout.addWidget(QLabel("Config file"))
+        layout.addWidget(self.config_path_display)
+        layout.addWidget(QLabel("Data directory"))
+        layout.addWidget(self.data_dir_display)
+        layout.addWidget(QLabel("Credentials file"))
+        layout.addWidget(self.credentials_path_display)
+        layout.addWidget(self.edit_config_button)
+        layout.addWidget(self.reload_config_button)
         return section
 
     def load_contacts(self) -> None:
@@ -421,6 +451,40 @@ class MainWindow(QMainWindow):
 
     def _invalidate_matching_cache(self) -> None:
         self.state.last_match_report = None
+
+    def edit_config(self) -> None:
+        dialog = ConfigDialog(app_paths=self.app_paths, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            self.statusBar().showMessage("Config edit cancelled.")
+            return
+
+        app_paths = write_app_paths(
+            data_dir=dialog.selected_data_dir(),
+            credentials_path=dialog.selected_credentials_path(),
+            config_path=self.app_paths.config_path,
+        )
+        self._apply_app_paths(app_paths)
+        self.statusBar().showMessage(f"Saved config to {app_paths.config_path}.")
+
+    def reload_config(self) -> None:
+        self._apply_app_paths(get_app_paths())
+        self.statusBar().showMessage(f"Reloaded config from {self.app_paths.config_path}.")
+
+    def _apply_app_paths(self, app_paths: AppPaths) -> None:
+        self.app_paths = app_paths
+        self.contacts_db_path = app_paths.contacts_db
+        self.results_db_path = app_paths.race_results_db
+        self._invalidate_matching_cache()
+        self._refresh_config_summary()
+
+    def _refresh_config_summary(self) -> None:
+        self.config_path_display.setText(str(self.app_paths.config_path or ""))
+        self.data_dir_display.setText(str(self.app_paths.data_dir))
+        if self.app_paths.credentials_path is not None:
+            credentials_text = str(self.app_paths.credentials_path)
+        else:
+            credentials_text = "(fallback) credentials.json"
+        self.credentials_path_display.setText(credentials_text)
 
     @staticmethod
     def _resolve_app_paths(

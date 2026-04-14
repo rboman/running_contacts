@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from running_contacts.config import default_data_dir, ensure_config_exists, get_app_paths, get_config_path
+from running_contacts.config import (
+    default_data_dir,
+    ensure_config_exists,
+    get_app_paths,
+    get_config_path,
+    write_app_paths,
+)
 
 
 def test_config_is_auto_created_and_points_to_current_data_dir() -> None:
@@ -26,11 +32,17 @@ def test_config_is_auto_created_and_points_to_current_data_dir() -> None:
 
 def test_config_can_point_to_custom_shared_data_dir() -> None:
     shared_dir = Path.cwd() / "dropbox" / "running_contacts_data"
-    config_path = get_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(f'data_dir = "{shared_dir}"\n', encoding="utf-8")
-
-    app_paths = get_app_paths()
+    app_paths = write_app_paths(data_dir=shared_dir)
 
     assert app_paths.data_dir == shared_dir.resolve()
-    assert app_paths.config_path == config_path
+    assert app_paths.config_path == get_config_path()
+
+
+def test_config_can_store_credentials_path() -> None:
+    shared_dir = Path.cwd() / "dropbox" / "running_contacts_data"
+    credentials_path = Path.cwd() / "secrets" / "credentials.json"
+
+    app_paths = write_app_paths(data_dir=shared_dir, credentials_path=credentials_path)
+
+    assert app_paths.data_dir == shared_dir.resolve()
+    assert app_paths.credentials_path == credentials_path.resolve()

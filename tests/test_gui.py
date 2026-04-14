@@ -39,6 +39,7 @@ def test_main_window_smoke(qt_app: QApplication, tmp_path: Path) -> None:
     assert isinstance(window.findChild(QGroupBox, "contacts_section"), QGroupBox)
     assert isinstance(window.findChild(QGroupBox, "race_results_section"), QGroupBox)
     assert isinstance(window.findChild(QGroupBox, "matching_section"), QGroupBox)
+    assert isinstance(window.findChild(QGroupBox, "config_section"), QGroupBox)
     assert isinstance(window.findChild(QTableWidget, "central_table"), QTableWidget)
     assert isinstance(window.statusBar(), QStatusBar)
     assert window.table.item(0, 0).text() == "No data loaded yet."
@@ -70,8 +71,43 @@ def test_main_window_uses_configured_default_paths(qt_app: QApplication) -> None
 
     assert window.contacts_db_path == app_paths.contacts_db
     assert window.results_db_path == app_paths.race_results_db
+    assert window.data_dir_display.text() == str(app_paths.data_dir)
     assert window.table.rowCount() == 1
     assert window.table.item(0, 1).text() == "Alice Example"
+
+    window.close()
+
+
+def test_edit_config_updates_main_window_paths(qt_app: QApplication, tmp_path: Path, monkeypatch: object) -> None:
+    new_data_dir = tmp_path / "dropbox-data"
+    new_credentials = tmp_path / "shared-credentials.json"
+    window = MainWindow()
+
+    class FakeDialog:
+        def __init__(self, *, app_paths: object, parent: object) -> None:
+            pass
+
+        def exec(self) -> int:
+            from PySide6.QtWidgets import QDialog
+
+            return QDialog.DialogCode.Accepted
+
+        def selected_data_dir(self) -> Path:
+            return new_data_dir
+
+        def selected_credentials_path(self) -> Path:
+            return new_credentials
+
+    monkeypatch.setattr("running_contacts_gui.main_window.ConfigDialog", FakeDialog)
+
+    window.edit_config_button.click()
+    qt_app.processEvents()
+
+    assert window.app_paths.data_dir == new_data_dir.resolve()
+    assert window.app_paths.credentials_path == new_credentials.resolve()
+    assert window.data_dir_display.text() == str(new_data_dir.resolve())
+    assert window.credentials_path_display.text() == str(new_credentials.resolve())
+    assert "Saved config" in window.statusBar().currentMessage()
 
     window.close()
 

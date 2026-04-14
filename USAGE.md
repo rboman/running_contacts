@@ -16,6 +16,7 @@ This file is auto-created on first CLI or GUI launch and contains:
 
 ```toml
 data_dir = "/absolute/path/to/running_contacts_data"
+credentials_path = "/absolute/path/to/credentials.json"
 ```
 
 All default local paths derive from that directory:
@@ -27,6 +28,12 @@ All default local paths derive from that directory:
 - `exports/`
 
 This makes it easy to point several machines to the same Dropbox-backed working directory, as long as only one machine uses the SQLite files at a time.
+
+Inspect the active config and resolved paths:
+
+```bash
+running-contacts config show
+```
 
 ## 1. Sync contacts
 
@@ -72,6 +79,7 @@ The GUI is intentionally simple, but already useful:
 - it loads contacts and exports them to JSON,
 - it fetches ACN races, lists datasets, shows results, and adds dataset aliases,
 - it runs matching, applies filters, and exports the visible CSV selection,
+- it shows and edits the local configuration, including the shared data directory and optional `credentials.json` path,
 - it still leaves Google sync and manual review workflows to the CLI for now.
 
 Recommended daily GUI workflow:
