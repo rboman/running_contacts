@@ -89,7 +89,6 @@ class MainWindow(QMainWindow):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.horizontalHeader().setStretchLastSection(True)
 
         self.table_presenter = TablePresenter(self.table)
 

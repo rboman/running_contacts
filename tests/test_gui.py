@@ -69,7 +69,29 @@ def test_load_contacts_populates_table(qt_app: QApplication, tmp_path: Path) -> 
     assert window.table.item(0, 4).text() == "Acme Running"
     assert window.table.item(0, 5).text() == "Alice Ex"
     assert window.table.item(0, 6).text() == "Fast runner"
+    assert window.table.item(0, 6).toolTip() == "Fast runner"
     assert window.statusBar().currentMessage() == "Loaded 2 contacts."
+
+    window.close()
+
+
+def test_contacts_view_applies_compact_initial_column_widths(qt_app: QApplication, tmp_path: Path) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+    )
+
+    window.contacts_load_button.click()
+    qt_app.processEvents()
+
+    assert window.table.columnWidth(0) == 60
+    assert window.table.columnWidth(1) == 180
+    assert window.table.columnWidth(2) == 220
+    assert window.table.columnWidth(3) == 150
+    assert window.table.columnWidth(4) == 180
+    assert window.table.columnWidth(5) == 180
+    assert window.table.horizontalHeader().stretchSectionCount() == 1
 
     window.close()
 

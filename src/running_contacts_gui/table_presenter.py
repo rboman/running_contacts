@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QHeaderView, QTableWidget, QTableWidgetItem
 
 from running_contacts.matching.models import MatchReport, MatchResult
 
@@ -20,6 +20,8 @@ class TableView:
     name: str
     headers: tuple[str, ...]
     rows: tuple[TableRow, ...]
+    initial_widths: tuple[int, ...] | None = None
+    stretch_column: int | None = None
 
 
 class TablePresenter:
@@ -35,6 +37,7 @@ class TablePresenter:
                 name="placeholder",
                 headers=("message",),
                 rows=(TableRow(cells=(message,), metadata={"view": "placeholder"}),),
+                stretch_column=0,
             )
         )
 
@@ -51,6 +54,8 @@ class TablePresenter:
                 name="contacts",
                 headers=("id", "display_name", "email", "phone", "organization", "aliases", "notes"),
                 rows=rows,
+                initial_widths=(60, 180, 220, 150, 180, 180, 260),
+                stretch_column=6,
             )
         )
 
@@ -67,6 +72,8 @@ class TablePresenter:
                 name="datasets",
                 headers=("id", "event_title", "event_date", "event_location", "report", "aliases", "rows"),
                 rows=rows,
+                initial_widths=(60, 240, 110, 160, 140, 180, 80),
+                stretch_column=1,
             )
         )
 
@@ -87,6 +94,8 @@ class TablePresenter:
                 name="race_results",
                 headers=("id", "position", "athlete_name", "finish_time", "team", "bib", "category"),
                 rows=rows,
+                initial_widths=(60, 80, 220, 120, 180, 90, 100),
+                stretch_column=4,
             )
         )
 
@@ -120,6 +129,8 @@ class TablePresenter:
                     "updated_at",
                 ),
                 rows=rows,
+                initial_widths=(90, 100, 220, 100, 220, 160),
+                stretch_column=4,
             )
         )
 
@@ -139,19 +150,36 @@ class TablePresenter:
 
     def _render(self, view: TableView) -> None:
         self._current_view_name = view.name
+        header = self.table.horizontalHeader()
         self.table.clear()
         self.table.setColumnCount(len(view.headers))
         self.table.setHorizontalHeaderLabels(list(view.headers))
         self.table.setRowCount(len(view.rows))
+        header.setStretchLastSection(False)
 
         for row_index, row in enumerate(view.rows):
             for column_index, value in enumerate(row.cells):
                 item = QTableWidgetItem(value)
+                if value:
+                    item.setToolTip(value)
                 if column_index == 0 and row.metadata is not None:
                     item.setData(Qt.ItemDataRole.UserRole, row.metadata)
                 self.table.setItem(row_index, column_index, item)
 
-        self.table.resizeColumnsToContents()
+        self._apply_initial_layout(view)
+
+    def _apply_initial_layout(self, view: TableView) -> None:
+        header = self.table.horizontalHeader()
+        widths = view.initial_widths or ()
+
+        for column_index in range(self.table.columnCount()):
+            if view.stretch_column == column_index:
+                header.setSectionResizeMode(column_index, QHeaderView.ResizeMode.Stretch)
+                continue
+
+            header.setSectionResizeMode(column_index, QHeaderView.ResizeMode.Interactive)
+            if column_index < len(widths):
+                self.table.setColumnWidth(column_index, widths[column_index])
 
     def _render_match_rows(self, *, name: str, matches: list[MatchResult]) -> None:
         rows = tuple(
@@ -183,6 +211,8 @@ class TablePresenter:
                     "matched_alias",
                 ),
                 rows=rows,
+                initial_widths=(90, 100, 220, 220, 120, 80, 80, 120, 180, 200),
+                stretch_column=8,
             )
         )
 
