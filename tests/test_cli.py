@@ -5,7 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from running_contacts.cli import app
-from running_contacts.config import get_config_path
+from running_contacts.config import default_credentials_path, get_config_path
 from running_contacts.contacts.models import ContactRecord, SyncStats
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.models import MatchReport, MatchResult
@@ -116,7 +116,7 @@ def test_contacts_sync_uses_default_credentials_file(monkeypatch: object, tmp_pa
     )
 
     assert result.exit_code == 0
-    assert captured["credentials_path"] == Path("credentials.json")
+    assert captured["credentials_path"] == default_credentials_path()
 
 
 def test_contacts_sync_uses_configured_credentials_file(monkeypatch: object, tmp_path: Path) -> None:

@@ -12,6 +12,12 @@ The application now uses a local machine config file:
 ~/.config/running_contacts/config.toml
 ```
 
+On Windows, the equivalent location is:
+
+```powershell
+$env:APPDATA\running_contacts\config.toml
+```
+
 This file is auto-created on first CLI or GUI launch and contains:
 
 ```toml
@@ -37,7 +43,7 @@ running-contacts config show
 
 ## 1. Sync contacts
 
-If `credentials.json` is at the repository root:
+If `credentials.json` is at the project root:
 
 ```bash
 running-contacts contacts sync
@@ -99,7 +105,7 @@ Then:
 
 ## Dropbox migration
 
-1. launch the CLI or GUI once to auto-create `~/.config/running_contacts/config.toml`
+1. launch the CLI or GUI once to auto-create the local config file
 2. edit `data_dir` so it points to your Dropbox folder
 3. copy the current `data/` contents into that shared folder
 4. restart the CLI or GUI

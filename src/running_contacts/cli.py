@@ -2,7 +2,7 @@ from pathlib import Path
 
 import typer
 
-from running_contacts.config import AppPaths, get_app_paths
+from running_contacts.config import AppPaths, default_credentials_path, get_app_paths
 from running_contacts.contacts.service import sync_google_contacts
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.service import (
@@ -20,7 +20,6 @@ race_results_app = typer.Typer(help="Recuperer et interroger les resultats de co
 matching_app = typer.Typer(help="Croiser les contacts locaux avec des resultats de course locaux.")
 config_app = typer.Typer(help="Inspecter la configuration locale et les chemins resolves.")
 
-DEFAULT_CREDENTIALS_PATH = Path("credentials.json")
 SORT_OPTIONS = ["position", "time", "athlete", "contact", "team", "score"]
 STATUS_OPTIONS = ["accepted", "ambiguous", "all"]
 
@@ -40,6 +39,7 @@ def hello() -> None:
 def config_show() -> None:
     """Affiche la configuration locale et les chemins resolus."""
     app_paths = _app_paths()
+    fallback_credentials_path = default_credentials_path()
     typer.echo(f"config_path: {app_paths.config_path}")
     typer.echo(f"data_dir: {app_paths.data_dir}")
     typer.echo(f"contacts_db: {app_paths.contacts_db}")
@@ -52,7 +52,7 @@ def config_show() -> None:
     if app_paths.credentials_path is not None:
         typer.echo(f"credentials_path: {app_paths.credentials_path}")
     else:
-        typer.echo(f"credentials_path: {DEFAULT_CREDENTIALS_PATH} (fallback)")
+        typer.echo(f"credentials_path: {fallback_credentials_path} (fallback)")
 
 
 def _resolve_dataset_id(
@@ -93,7 +93,7 @@ def contacts_sync(
         "--credentials",
         file_okay=True,
         dir_okay=False,
-        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise ./credentials.json si present.",
+        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise credentials.json a la racine du projet si present.",
     ),
     db_path: Path | None = typer.Option(
         None,
@@ -113,9 +113,10 @@ def contacts_sync(
 ) -> None:
     """Synchronise Google Contacts vers SQLite."""
     app_paths = _app_paths()
+    fallback_credentials_path = default_credentials_path()
     resolved_db_path = db_path or app_paths.contacts_db
     resolved_token_path = token_path or app_paths.google_token
-    resolved_credentials_path = credentials_path or app_paths.credentials_path or DEFAULT_CREDENTIALS_PATH
+    resolved_credentials_path = credentials_path or app_paths.credentials_path or fallback_credentials_path
     if not resolved_credentials_path.exists() or not resolved_credentials_path.is_file():
         raise typer.BadParameter(
             "Google OAuth credentials file not found. "

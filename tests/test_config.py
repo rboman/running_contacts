@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 from running_contacts.config import (
+    default_credentials_path,
     default_data_dir,
     ensure_config_exists,
     get_app_paths,
@@ -19,7 +21,7 @@ def test_config_is_auto_created_and_points_to_current_data_dir() -> None:
     ensure_config_exists()
 
     assert config_path.exists()
-    assert default_data_dir() == Path.cwd() / "data"
+    assert default_data_dir() == (Path.cwd() / "data").resolve()
     app_paths = get_app_paths()
     assert app_paths.data_dir == (Path.cwd() / "data").resolve()
     assert app_paths.contacts_db == app_paths.data_dir / "contacts.sqlite3"
@@ -46,3 +48,17 @@ def test_config_can_store_credentials_path() -> None:
 
     assert app_paths.data_dir == shared_dir.resolve()
     assert app_paths.credentials_path == credentials_path.resolve()
+
+
+def test_default_credentials_path_points_to_project_root() -> None:
+    assert default_credentials_path() == (Path.cwd() / "credentials.json").resolve()
+
+
+def test_get_config_path_uses_windows_appdata(monkeypatch: object, tmp_path: Path) -> None:
+    appdata_dir = tmp_path / "AppData" / "Roaming"
+
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setenv("APPDATA", str(appdata_dir))
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    assert get_config_path() == appdata_dir / "running_contacts" / "config.toml"

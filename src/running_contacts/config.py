@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 import tomllib
@@ -56,12 +57,50 @@ def build_app_paths(*, data_dir: Path, config_path: Path | None = None) -> AppPa
 
 
 def get_config_path() -> Path:
-    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    if xdg_config_home:
-        base_dir = Path(xdg_config_home).expanduser()
+    config_home_override = os.environ.get("RUNNING_CONTACTS_CONFIG_HOME")
+    if config_home_override:
+        base_dir = Path(config_home_override).expanduser()
+    elif sys.platform.startswith("win"):
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            base_dir = Path(appdata).expanduser()
+        else:
+            base_dir = Path.home() / "AppData" / "Roaming"
     else:
-        base_dir = Path.home() / ".config"
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+        if xdg_config_home:
+            base_dir = Path(xdg_config_home).expanduser()
+        else:
+            base_dir = Path.home() / ".config"
     return base_dir / "running_contacts" / "config.toml"
+
+
+def get_project_root() -> Path:
+    project_root_override = os.environ.get("RUNNING_CONTACTS_PROJECT_ROOT")
+    if project_root_override:
+        return Path(project_root_override).expanduser().resolve()
+
+    cwd_root = _find_project_root(Path.cwd())
+    if cwd_root is not None:
+        return cwd_root
+
+    module_root = _find_project_root(Path(__file__).resolve())
+    if module_root is not None:
+        return module_root
+
+    return Path.cwd().resolve()
+
+
+def default_credentials_path() -> Path:
+    return (get_project_root() / "credentials.json").resolve()
+
+
+def _find_project_root(start_path: Path) -> Path | None:
+    candidate = start_path if start_path.is_dir() else start_path.parent
+    for path in (candidate, *candidate.parents):
+        if (path / "pyproject.toml").exists():
+            return path.resolve()
+    return None
 
 
 def ensure_config_exists(*, config_path: Path | None = None) -> Path:
@@ -120,7 +159,7 @@ def write_app_paths(
 
 
 def default_data_dir() -> Path:
-    return (Path.cwd() / "data").resolve()
+    return (get_project_root() / "data").resolve()
 
 
 def _resolve_configured_path(raw_value: object, *, config_path: Path) -> Path:

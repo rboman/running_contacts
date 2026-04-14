@@ -16,4 +16,5 @@ if str(SRC) not in sys.path:
 @pytest.fixture(autouse=True)
 def isolate_runtime_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("RUNNING_CONTACTS_PROJECT_ROOT", str(tmp_path))
     monkeypatch.chdir(tmp_path)

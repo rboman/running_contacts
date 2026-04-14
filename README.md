@@ -75,7 +75,13 @@ Fichier de config:
 ~/.config/running_contacts/config.toml
 ```
 
-La première exécution de la CLI ou de la GUI crée automatiquement ce fichier s'il n'existe pas encore, en pointant vers l'emplacement local actuel par défaut.
+Sous Windows, l'emplacement équivalent est:
+
+```powershell
+$env:APPDATA\running_contacts\config.toml
+```
+
+La première exécution de la CLI ou de la GUI crée automatiquement ce fichier s'il n'existe pas encore, en pointant vers `data/` à la racine du projet.
 
 Format:
 
@@ -120,7 +126,7 @@ sudo apt install libxcb-cursor0
 4. Télécharger le fichier `credentials.json`.
 
 Le fichier d’identifiants peut rester hors du dépôt. Le token OAuth généré par la CLI est stocké localement sous `google/token.json` dans le `data_dir` configuré.
-Si `credentials.json` est présent à la racine du dépôt, la commande de sync l’utilise automatiquement.
+Si `credentials.json` est présent à la racine du projet, la commande de sync l’utilise automatiquement, même si la CLI est lancée depuis un autre répertoire.
 
 ## Commandes utiles
 
@@ -209,7 +215,7 @@ La GUI actuelle reste volontairement simple, mais elle est déjà utile au quoti
 
 ## Migration vers Dropbox
 
-1. lancer une fois la CLI ou la GUI pour créer `~/.config/running_contacts/config.toml`
+1. lancer une fois la CLI ou la GUI pour créer le fichier de config local
 2. éditer `config.toml` pour pointer `data_dir` vers un dossier Dropbox partagé
 3. copier le contenu actuel de `data/` vers ce dossier partagé
 4. relancer `running-contacts` ou `running-contacts-gui`

@@ -22,7 +22,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from running_contacts.config import AppPaths, build_app_paths, get_app_paths, write_app_paths
+from running_contacts.config import (
+    AppPaths,
+    build_app_paths,
+    default_credentials_path,
+    get_app_paths,
+    write_app_paths,
+)
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.models import MatchReport, MatchResult
 from running_contacts.matching.service import (
@@ -515,7 +521,7 @@ class MainWindow(QMainWindow):
         if self.app_paths.credentials_path is not None:
             credentials_text = str(self.app_paths.credentials_path)
         else:
-            credentials_text = "(fallback) credentials.json"
+            credentials_text = f"(fallback) {default_credentials_path()}"
         self.credentials_path_display.setText(credentials_text)
 
     @staticmethod

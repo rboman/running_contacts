@@ -40,6 +40,12 @@ Local config file:
 ~/.config/running_contacts/config.toml
 ```
 
+On Windows, use:
+
+```powershell
+$env:APPDATA\running_contacts\config.toml
+```
+
 Supported key:
 
 ```toml
