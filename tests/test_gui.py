@@ -47,6 +47,21 @@ def test_main_window_smoke(qt_app: QApplication, tmp_path: Path) -> None:
     window.close()
 
 
+def test_main_window_uses_tabs_for_left_side_controls(qt_app: QApplication, tmp_path: Path) -> None:
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=tmp_path / "race_results.sqlite3",
+    )
+
+    assert window.controls_tabs.count() == 4
+    assert window.controls_tabs.tabText(0) == "Contacts"
+    assert window.controls_tabs.tabText(1) == "Race Results"
+    assert window.controls_tabs.tabText(2) == "Matching"
+    assert window.controls_tabs.tabText(3) == "Config"
+
+    window.close()
+
+
 def test_main_window_uses_configured_default_paths(qt_app: QApplication) -> None:
     app_paths = get_app_paths()
     repository = ContactsRepository(app_paths.contacts_db)

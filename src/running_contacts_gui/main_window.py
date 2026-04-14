@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QStatusBar,
     QTableWidget,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -98,18 +99,21 @@ class MainWindow(QMainWindow):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
 
+        self.controls_tabs = QTabWidget()
+        self.controls_tabs.setObjectName("controls_tabs")
+        self.controls_tabs.setTabPosition(QTabWidget.TabPosition.North)
+        self.controls_tabs.setMinimumWidth(340)
+
         self.table_presenter = TablePresenter(self.table)
 
         central_widget = QWidget()
         layout = QHBoxLayout(central_widget)
-        controls_layout = QVBoxLayout()
-        controls_layout.addWidget(self._build_contacts_section())
-        controls_layout.addWidget(self._build_race_results_section())
-        controls_layout.addWidget(self._build_matching_section())
-        controls_layout.addWidget(self._build_config_section())
-        controls_layout.addStretch(1)
+        self.controls_tabs.addTab(self._build_contacts_tab(), "Contacts")
+        self.controls_tabs.addTab(self._build_race_results_tab(), "Race Results")
+        self.controls_tabs.addTab(self._build_matching_tab(), "Matching")
+        self.controls_tabs.addTab(self._build_config_tab(), "Config")
 
-        layout.addLayout(controls_layout, stretch=0)
+        layout.addWidget(self.controls_tabs, stretch=0)
         layout.addWidget(self.table, stretch=1)
         self.setCentralWidget(central_widget)
 
@@ -136,6 +140,13 @@ class MainWindow(QMainWindow):
         self.matching_reviewed_only_checkbox.checkStateChanged.connect(self.apply_matching_filters)
         self._refresh_config_summary()
 
+    def _build_contacts_tab(self) -> QWidget:
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        page_layout.addWidget(self._build_contacts_section())
+        page_layout.addStretch(1)
+        return page
+
     def _build_contacts_section(self) -> QGroupBox:
         section = QGroupBox("Contacts")
         section.setObjectName("contacts_section")
@@ -146,6 +157,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.contacts_load_button)
         layout.addWidget(self.contacts_export_button)
         return section
+
+    def _build_race_results_tab(self) -> QWidget:
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        page_layout.addWidget(self._build_race_results_section())
+        page_layout.addStretch(1)
+        return page
 
     def _build_race_results_section(self) -> QGroupBox:
         section = QGroupBox("Race Results")
@@ -166,6 +184,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.results_alias_input)
         layout.addWidget(self.add_alias_button)
         return section
+
+    def _build_matching_tab(self) -> QWidget:
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        page_layout.addWidget(self._build_matching_section())
+        page_layout.addStretch(1)
+        return page
 
     def _build_matching_section(self) -> QGroupBox:
         section = QGroupBox("Matching")
@@ -189,6 +214,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.run_matching_button)
         layout.addWidget(self.export_matches_button)
         return section
+
+    def _build_config_tab(self) -> QWidget:
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        page_layout.addWidget(self._build_config_section())
+        page_layout.addStretch(1)
+        return page
 
     def _build_config_section(self) -> QGroupBox:
         section = QGroupBox("Config")
