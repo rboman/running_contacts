@@ -160,13 +160,16 @@ Lancer la GUI locale:
 running-contacts-gui
 ```
 
-La première version de la GUI reste volontairement simple:
+La GUI actuelle reste volontairement simple, mais elle est déjà utile au quotidien:
 
 - interface desktop locale en PySide6,
 - sections `Contacts`, `Race Results` et `Matching`,
 - table centrale unique,
-- lecture utile des données locales existantes,
-- actions avancées encore laissées à la CLI.
+- import ACN depuis l'interface,
+- ajout d'alias de dataset,
+- export JSON des contacts,
+- filtrage local du matching et export CSV,
+- sync Google et reviews manuelles encore laissées à la CLI.
 
 Guide pratique d'utilisation:
 
@@ -182,7 +185,7 @@ sed -n '1,220p' HANDOFF.md
 
 ## Roadmap courte
 
-1. Ajouter une GUI desktop minimale et lisible au-dessus du socle existant.
-2. Garder le moteur métier et la CLI stables pendant l'ajout de cette GUI.
-3. Étendre ensuite progressivement la GUI aux actions aujourd'hui encore réservées à la CLI.
+1. Consolider la GUI comme interface locale de pilotage quotidien.
+2. Ajouter ensuite la revue manuelle des matches dans la GUI.
+3. Garder le moteur métier et la CLI stables pendant cette montée en capacité.
 4. Étendre `race_results` à d’autres providers si nécessaire.

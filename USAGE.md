@@ -42,11 +42,28 @@ Launch the GUI:
 running-contacts-gui
 ```
 
-This first GUI version is intentionally simple:
+The GUI is intentionally simple, but already useful:
 
 - it keeps the CLI unchanged,
-- it reads local contacts, datasets, results, and accepted matches,
-- it leaves sync, fetch, export, and review workflows to the CLI for now.
+- it loads contacts and exports them to JSON,
+- it fetches ACN races, lists datasets, shows results, and adds dataset aliases,
+- it runs matching, applies filters, and exports the visible CSV selection,
+- it still leaves Google sync and manual review workflows to the CLI for now.
+
+Recommended daily GUI workflow:
+
+```bash
+running-contacts-gui
+```
+
+Then:
+
+- load contacts when you want to inspect the local cache,
+- fetch a race from its ACN URL,
+- add a short alias to the dataset,
+- run matching on that alias,
+- refine the visible list with filters,
+- export the filtered CSV when needed.
 
 ## 2. Import a race
 
@@ -177,4 +194,4 @@ running-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --con
 
 ## Current priority
 
-The current matching quality is considered good enough for now. The next development priority is the minimal PySide6 desktop GUI rather than more matching work.
+The current matching quality is considered good enough for now. The next development priority is to extend the PySide6 GUI toward review workflows rather than changing the matching engine itself.

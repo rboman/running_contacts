@@ -12,7 +12,24 @@ Read this file first when resuming work on `running_contacts` in a later Codex s
   - race dataset aliases,
   - manual review commands (`accept`, `reject`, `clear-review`, `list-reviews`),
   - sorted and filtered listing (`matching list`).
-- a first desktop GUI is now the intended next product step, on top of the existing local-first workflow.
+- a first desktop GUI is now implemented on top of the existing local-first workflow.
+
+## GUI Status
+
+Current GUI capabilities:
+
+- load contacts from the local database
+- export contacts to JSON
+- fetch ACN datasets
+- list datasets and show stored race results
+- add dataset aliases
+- run matching with local filters
+- export filtered matches to CSV
+
+Still CLI-only for now:
+
+- Google Contacts sync
+- manual review actions on matches
 
 ## Important Local Selectors
 
@@ -109,15 +126,15 @@ HANDOFF.md
 
 Most likely next step:
 
-- add a minimal local desktop GUI in PySide6 while keeping the CLI and core logic unchanged
+- extend the GUI with a lightweight review workflow for accepted / ambiguous / reviewed results
 
 Why this is the next step:
 
 1. the current matching is considered satisfactory for now
-2. the project already has useful local workflows worth exposing graphically
-3. a simple GUI can improve day-to-day usability without changing the core services
+2. the GUI already covers the main local read/import/export flows
+3. manual review is now the most obvious remaining daily action still stuck in the CLI
 
-Initial GUI scope:
+Current GUI scope:
 
 1. `Contacts` section
 2. `Race Results` section
