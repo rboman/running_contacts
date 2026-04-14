@@ -5,6 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from running_contacts.cli import app
+from running_contacts.config import get_config_path
 from running_contacts.contacts.models import ContactRecord, SyncStats
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.models import MatchReport, MatchResult
@@ -13,6 +14,40 @@ from running_contacts.race_results.storage import RaceResultsRepository
 
 
 runner = CliRunner()
+
+
+def test_hello_creates_config_file() -> None:
+    config_path = get_config_path()
+
+    result = runner.invoke(app, ["hello"])
+
+    assert result.exit_code == 0
+    assert config_path.exists()
+
+
+def test_contacts_list_uses_configured_default_data_dir() -> None:
+    app_data_dir = Path.cwd() / "data"
+    db_path = app_data_dir / "contacts.sqlite3"
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source_contact_id="people/1",
+                display_name="Alice Example",
+                raw_payload={"resourceName": "people/1"},
+            )
+        ],
+        sync_run_id=sync_run_id,
+    )
+
+    result = runner.invoke(app, ["contacts", "list"])
+
+    assert result.exit_code == 0
+    assert "Alice Example" in result.stdout
 
 
 def test_contacts_sync_command(monkeypatch: object, tmp_path: Path) -> None:

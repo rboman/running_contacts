@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from running_contacts.config import AppPaths, build_app_paths, get_app_paths
 from running_contacts.contacts.storage import ContactsRepository
 from running_contacts.matching.models import MatchReport, MatchResult
 from running_contacts.matching.service import (
@@ -35,12 +36,7 @@ from .state import GuiState, MatchingFilters
 from .table_presenter import TablePresenter
 
 
-DEFAULT_CONTACTS_DB_PATH = Path("data/contacts.sqlite3")
-DEFAULT_RESULTS_DB_PATH = Path("data/race_results.sqlite3")
 DEFAULT_RESULTS_LIMIT = 100
-DEFAULT_RESULTS_RAW_DIR = Path("data/raw/acn_timing")
-DEFAULT_CONTACTS_EXPORT_PATH = Path("data/exports/contacts.json")
-DEFAULT_MATCH_EXPORT_PATH = Path("data/exports/matches.csv")
 STATUS_OPTIONS = ("accepted", "ambiguous", "all")
 SORT_OPTIONS = ("position", "time", "athlete", "contact", "team", "score")
 
@@ -49,12 +45,17 @@ class MainWindow(QMainWindow):
     def __init__(
         self,
         *,
-        contacts_db_path: Path = DEFAULT_CONTACTS_DB_PATH,
-        results_db_path: Path = DEFAULT_RESULTS_DB_PATH,
+        contacts_db_path: Path | None = None,
+        results_db_path: Path | None = None,
+        app_paths: AppPaths | None = None,
     ) -> None:
         super().__init__()
-        self.contacts_db_path = Path(contacts_db_path)
-        self.results_db_path = Path(results_db_path)
+        self.app_paths = app_paths or self._resolve_app_paths(
+            contacts_db_path=contacts_db_path,
+            results_db_path=results_db_path,
+        )
+        self.contacts_db_path = Path(contacts_db_path or self.app_paths.contacts_db)
+        self.results_db_path = Path(results_db_path or self.app_paths.race_results_db)
         self.state = GuiState()
 
         self.setWindowTitle("running_contacts")
@@ -195,7 +196,7 @@ class MainWindow(QMainWindow):
             repository.initialize()
             output_path = self._choose_save_path(
                 title="Export contacts JSON",
-                default_path=self.state.last_export_path or DEFAULT_CONTACTS_EXPORT_PATH,
+                default_path=self.state.last_export_path or self.app_paths.contacts_export_json,
                 file_filter="JSON Files (*.json)",
             )
             if output_path is None:
@@ -241,7 +242,7 @@ class MainWindow(QMainWindow):
             stats = fetch_acn_results(
                 url=url,
                 db_path=self.results_db_path,
-                raw_dir=DEFAULT_RESULTS_RAW_DIR,
+                raw_dir=self.app_paths.raw_acn_dir,
             )
             repository = RaceResultsRepository(self.results_db_path)
             repository.initialize()
@@ -291,7 +292,7 @@ class MainWindow(QMainWindow):
             matches = self._filtered_matches(report)
             output_path = self._choose_save_path(
                 title="Export matches CSV",
-                default_path=self.state.last_export_path or DEFAULT_MATCH_EXPORT_PATH,
+                default_path=self.state.last_export_path or self.app_paths.matches_export_csv,
                 file_filter="CSV Files (*.csv)",
             )
             if output_path is None:
@@ -420,6 +421,34 @@ class MainWindow(QMainWindow):
 
     def _invalidate_matching_cache(self) -> None:
         self.state.last_match_report = None
+
+    @staticmethod
+    def _resolve_app_paths(
+        *,
+        contacts_db_path: Path | None,
+        results_db_path: Path | None,
+    ) -> AppPaths:
+        if contacts_db_path is None and results_db_path is None:
+            return get_app_paths()
+        return build_app_paths(
+            data_dir=MainWindow._infer_data_dir(
+                contacts_db_path=contacts_db_path,
+                results_db_path=results_db_path,
+            )
+        )
+
+    @staticmethod
+    def _infer_data_dir(
+        *,
+        contacts_db_path: Path | None,
+        results_db_path: Path | None,
+    ) -> Path:
+        candidates = [path.parent for path in [contacts_db_path, results_db_path] if path is not None]
+        if not candidates:
+            return Path.cwd() / "data"
+        if len(candidates) == 2 and candidates[0] == candidates[1]:
+            return candidates[0]
+        return candidates[0]
 
     def _choose_save_path(self, *, title: str, default_path: Path, file_filter: str) -> Path | None:
         selected_path, _ = QFileDialog.getSaveFileName(

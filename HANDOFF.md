@@ -4,8 +4,8 @@ Read this file first when resuming work on `running_contacts` in a later Codex s
 
 ## Current State
 
-- `contacts` is implemented and syncs one Google account into `data/contacts.sqlite3`.
-- `race_results` is implemented for ACN Timing / Chronorace and stores local datasets in `data/race_results.sqlite3`.
+- `contacts` is implemented and syncs one Google account into `contacts.sqlite3` under the configured `data_dir`.
+- `race_results` is implemented for ACN Timing / Chronorace and stores local datasets in `race_results.sqlite3` under the configured `data_dir`.
 - `matching` is implemented with:
   - exact and fuzzy matching,
   - contact aliases,
@@ -13,6 +13,7 @@ Read this file first when resuming work on `running_contacts` in a later Codex s
   - manual review commands (`accept`, `reject`, `clear-review`, `list-reviews`),
   - sorted and filtered listing (`matching list`).
 - a first desktop GUI is now implemented on top of the existing local-first workflow.
+- the default data location is now resolved through a machine-local config file that points to a `data_dir`
 
 ## GUI Status
 
@@ -30,6 +31,34 @@ Still CLI-only for now:
 
 - Google Contacts sync
 - manual review actions on matches
+
+## Config / Shared Data
+
+Local config file:
+
+```bash
+~/.config/running_contacts/config.toml
+```
+
+Supported key:
+
+```toml
+data_dir = "/absolute/path/to/running_contacts_data"
+```
+
+All default paths now derive from that directory:
+
+- `contacts.sqlite3`
+- `race_results.sqlite3`
+- `google/token.json`
+- `raw/acn_timing/`
+- `exports/`
+
+Recommended shared usage:
+
+1. point `data_dir` to a Dropbox-backed folder on each machine
+2. use only one machine at a time on the shared SQLite files
+3. wait for Dropbox sync to finish before switching machines
 
 ## Important Local Selectors
 

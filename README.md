@@ -25,7 +25,7 @@ Une extension envisagée ensuite est l’analyse de documents longs, par exemple
 La première brique `contacts` est en place pour un compte Google:
 
 - OAuth Desktop via Google People API.
-- Synchronisation complète réexécutable vers `data/contacts.sqlite3`.
+- Synchronisation complète réexécutable vers `contacts.sqlite3` dans le `data_dir` configuré.
 - Consultation locale sans appel réseau.
 - Export JSON de l’état local.
 
@@ -40,8 +40,8 @@ La deuxième brique `race_results` est maintenant en place pour ACN Timing:
 - parsing d’URL publique ACN Timing,
 - récupération des métadonnées d’événement via Chronorace,
 - récupération du tableau de résultats via l’API Chronorace utilisée par ACN,
-- snapshot JSON brut sous `data/raw/acn_timing/`,
-- stockage SQLite local dans `data/race_results.sqlite3`,
+- snapshot JSON brut sous `raw/acn_timing/` dans le `data_dir` configuré,
+- stockage SQLite local dans `race_results.sqlite3` dans le `data_dir` configuré,
 - alias manuels de datasets pour éviter d’utiliser seulement `dataset_id`.
 
 La troisième brique `matching` est maintenant disponible:
@@ -65,6 +65,34 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+## Répertoire de données configurable
+
+Le projet utilise maintenant un fichier de config local par machine pour choisir où stocker l'état local.
+
+Fichier de config:
+
+```bash
+~/.config/running_contacts/config.toml
+```
+
+La première exécution de la CLI ou de la GUI crée automatiquement ce fichier s'il n'existe pas encore, en pointant vers l'emplacement local actuel par défaut.
+
+Format:
+
+```toml
+data_dir = "/chemin/absolu/vers/running_contacts_data"
+```
+
+Tout l'état local dérive ensuite de ce répertoire:
+
+- `contacts.sqlite3`
+- `race_results.sqlite3`
+- `google/token.json`
+- `raw/acn_timing/`
+- `exports/`
+
+Cela permet de pointer vers un dossier Dropbox partagé entre machines, à condition de n'utiliser qu'une seule machine à la fois sur ces bases SQLite.
+
 Pour installer aussi la GUI desktop PySide6:
 
 ```bash
@@ -84,7 +112,7 @@ sudo apt install libxcb-cursor0
 3. Créer des identifiants OAuth pour une application Desktop.
 4. Télécharger le fichier `credentials.json`.
 
-Le fichier d’identifiants peut rester hors du dépôt. Le token OAuth généré par la CLI est stocké localement sous `data/google/token.json` par défaut.
+Le fichier d’identifiants peut rester hors du dépôt. Le token OAuth généré par la CLI est stocké localement sous `google/token.json` dans le `data_dir` configuré.
 Si `credentials.json` est présent à la racine du dépôt, la commande de sync l’utilise automatiquement.
 
 ## Commandes utiles
@@ -170,6 +198,20 @@ La GUI actuelle reste volontairement simple, mais elle est déjà utile au quoti
 - export JSON des contacts,
 - filtrage local du matching et export CSV,
 - sync Google et reviews manuelles encore laissées à la CLI.
+
+## Migration vers Dropbox
+
+1. lancer une fois la CLI ou la GUI pour créer `~/.config/running_contacts/config.toml`
+2. éditer `config.toml` pour pointer `data_dir` vers un dossier Dropbox partagé
+3. copier le contenu actuel de `data/` vers ce dossier partagé
+4. relancer `running-contacts` ou `running-contacts-gui`
+5. vérifier que contacts, datasets, alias et exports sont bien retrouvés
+
+Précautions:
+
+- ne pas ouvrir la même base SQLite en même temps sur deux machines
+- laisser Dropbox finir la synchronisation avant de changer de machine
+- en cas de conflit Dropbox, inspecter d'abord les fichiers `.sqlite3` et les copies conflictuelles avant de continuer
 
 Guide pratique d'utilisation:
 

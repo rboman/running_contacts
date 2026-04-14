@@ -18,6 +18,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QGroupBox, QStatusBar, QTableWidget
 
+from running_contacts.config import get_app_paths
 from running_contacts_gui.main_window import MainWindow
 
 
@@ -41,6 +42,36 @@ def test_main_window_smoke(qt_app: QApplication, tmp_path: Path) -> None:
     assert isinstance(window.findChild(QTableWidget, "central_table"), QTableWidget)
     assert isinstance(window.statusBar(), QStatusBar)
     assert window.table.item(0, 0).text() == "No data loaded yet."
+
+    window.close()
+
+
+def test_main_window_uses_configured_default_paths(qt_app: QApplication) -> None:
+    app_paths = get_app_paths()
+    repository = ContactsRepository(app_paths.contacts_db)
+    repository.initialize()
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source_contact_id="people/1",
+                display_name="Alice Example",
+                raw_payload={"resourceName": "people/1"},
+            )
+        ],
+        sync_run_id=sync_run_id,
+    )
+    window = MainWindow()
+
+    window.contacts_load_button.click()
+    qt_app.processEvents()
+
+    assert window.contacts_db_path == app_paths.contacts_db
+    assert window.results_db_path == app_paths.race_results_db
+    assert window.table.rowCount() == 1
+    assert window.table.item(0, 1).text() == "Alice Example"
 
     window.close()
 

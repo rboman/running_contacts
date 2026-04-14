@@ -32,3 +32,6 @@ data/exports/
 .env
 credentials.json
 token.json
+
+# misc
+*.tgz

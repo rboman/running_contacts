@@ -4,6 +4,30 @@ This file is the practical help for day-to-day use of `running_contacts`.
 
 If you come back in a later Codex session, read `HANDOFF.md` first.
 
+## Data directory
+
+The application now uses a local machine config file:
+
+```bash
+~/.config/running_contacts/config.toml
+```
+
+This file is auto-created on first CLI or GUI launch and contains:
+
+```toml
+data_dir = "/absolute/path/to/running_contacts_data"
+```
+
+All default local paths derive from that directory:
+
+- `contacts.sqlite3`
+- `race_results.sqlite3`
+- `google/token.json`
+- `raw/acn_timing/`
+- `exports/`
+
+This makes it easy to point several machines to the same Dropbox-backed working directory, as long as only one machine uses the SQLite files at a time.
+
 ## 1. Sync contacts
 
 If `credentials.json` is at the repository root:
@@ -64,6 +88,20 @@ Then:
 - run matching on that alias,
 - refine the visible list with filters,
 - export the filtered CSV when needed.
+
+## Dropbox migration
+
+1. launch the CLI or GUI once to auto-create `~/.config/running_contacts/config.toml`
+2. edit `data_dir` so it points to your Dropbox folder
+3. copy the current `data/` contents into that shared folder
+4. restart the CLI or GUI
+5. confirm that contacts, race datasets, aliases, and exports are visible
+
+Important:
+
+- do not use the same shared SQLite files simultaneously on two machines
+- wait for Dropbox sync to finish before switching machines
+- if Dropbox creates conflict copies, inspect those files before continuing
 
 ## 2. Import a race
 
