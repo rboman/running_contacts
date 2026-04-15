@@ -450,6 +450,40 @@ def test_main_window_exposes_help_menu_actions(qt_app: QApplication, tmp_path: P
     window.close()
 
 
+def test_help_dialogs_include_repository_and_credits_links(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_about(_parent: object, title: str, text: str) -> None:
+        captured["about_title"] = title
+        captured["about_text"] = text
+
+    def fake_information(_parent: object, title: str, text: str) -> None:
+        captured["credits_title"] = title
+        captured["credits_text"] = text
+
+    monkeypatch.setattr(QMessageBox, "about", staticmethod(fake_about))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(fake_information))
+
+    window.show_about_dialog()
+    window.show_credits_dialog()
+
+    assert captured["about_title"] == "About match-my-contacts"
+    assert "github.com/rboman/running_contacts" in captured["about_text"]
+    assert captured["credits_title"] == "Credits"
+    assert "Romain Boman" in captured["credits_text"]
+    assert "github.com/rboman" in captured["credits_text"]
+    assert "vibe-coding" in captured["credits_text"]
+    assert "OpenAI Codex" in captured["credits_text"]
+
+    window.close()
 def test_file_dialogs_remember_last_directory_in_main_window(
     qt_app: QApplication, tmp_path: Path, monkeypatch: object
 ) -> None:
@@ -537,8 +571,6 @@ def test_config_dialog_remembers_last_directories(tmp_path: Path, monkeypatch: o
     assert Path(calls[1]) == app_paths.data_dir
     assert settings.value("file_dialogs/config_data_dir") == str(data_dir_choice)
     assert settings.value("file_dialogs/config_credentials_file") == str(credentials_choice.parent)
-
-
 def test_main_window_sets_tooltips_on_main_actions(qt_app: QApplication, tmp_path: Path) -> None:
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",

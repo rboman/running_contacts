@@ -1066,8 +1066,12 @@ class MainWindow(QMainWindow):
             self,
             "About match-my-contacts",
             (
-                "match-my-contacts is a local desktop tool for browsing contacts, "
-                "importing race results, and reviewing matches."
+                "<p><b>match-my-contacts</b> is a local-first desktop tool for browsing contacts, "
+                "importing race results, and reviewing matches.</p>"
+                "<p>Project repository: "
+                '<a href="https://github.com/rboman/running_contacts">'
+                "github.com/rboman/running_contacts"
+                "</a></p>"
             ),
         )
 
@@ -1076,7 +1080,12 @@ class MainWindow(QMainWindow):
             self,
             "Credits",
             (
-                "Built with PySide6 on top of the local-first match-my-contacts "
-                "storage and matching services."
+                "<p><b>Created by Romain Boman</b> as a power user of Codex.</p>"
+                "<p>GitHub profile: "
+                '<a href="https://github.com/rboman">github.com/rboman</a></p>'
+                "<p>This codebase is an experimental <i>vibe-coding</i> project developed with "
+                "OpenAI Codex to explore pragmatic AI-assisted software delivery.</p>"
+                "<p><b>AI credit:</b> OpenAI Codex (GPT-5.3-Codex) contributed to implementation "
+                "and iteration workflows.</p>"
             ),
         )
