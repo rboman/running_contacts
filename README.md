@@ -205,7 +205,12 @@ La GUI actuelle reste volontairement simple, mais elle est déjà utile au quoti
 
 - interface desktop locale en PySide6,
 - sections `Contacts`, `Race Results` et `Matching`,
+- menu `Help` avec `About` et `Credits`,
 - table centrale unique,
+- auto-load local des contacts au dÃ©marrage quand la base existe dÃ©jÃ ,
+- import CSV ciblÃ© pour les exports Google Contacts,
+- choix des colonnes visibles dans la table contacts,
+- fiche contact dÃ©taillÃ©e au double-clic,
 - import ACN depuis l'interface,
 - ajout d'alias de dataset,
 - export JSON des contacts,
@@ -238,6 +243,14 @@ Fichier de reprise pour une future session Codex:
 ```bash
 sed -n '1,220p' HANDOFF.md
 ```
+
+Mise Ã  jour GUI rÃ©cente:
+
+- auto-load local des contacts au dÃ©marrage si la base existe dÃ©jÃ 
+- import CSV ciblÃ© pour les exports Google Contacts
+- choix persistant des colonnes visibles dans la table contacts
+- fiche contact dÃ©taillÃ©e au double-clic
+- menu `Help` avec `About` et `Credits`
 
 ## Roadmap courte
 

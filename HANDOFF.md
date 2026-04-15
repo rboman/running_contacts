@@ -193,3 +193,16 @@ pip install -e .[gui]
 sudo apt install libxcb-cursor0  # if needed on Linux/X11
 match-my-contacts-gui
 ```
+
+Recent GUI additions to keep in mind:
+
+- local contacts auto-load on startup when `contacts.sqlite3` already exists
+- `Contacts` can now import Google Contacts CSV exports directly from the GUI
+- contacts table column visibility is stored in Qt settings, not in `config.toml`
+- double-clicking a contact row opens a read-only details dialog with DB metadata and raw JSON
+- the GUI now includes a `Help` menu with `About` and `Credits`
+
+Current CSV assumption:
+
+- only the Google Contacts export format is supported in the GUI
+- there is still no generic CSV mapping wizard

@@ -16,7 +16,8 @@ from match_my_contacts.race_results.storage import RaceResultsRepository
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QGroupBox, QStatusBar, QTableWidget
+from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import QApplication, QDialog, QGroupBox, QStatusBar, QTableWidget
 
 from match_my_contacts.config import get_app_paths
 from match_my_contacts_gui.main_window import MainWindow
@@ -51,6 +52,7 @@ def test_main_window_uses_tabs_for_left_side_controls(qt_app: QApplication, tmp_
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
 
     assert window.controls_tabs.count() == 4
@@ -79,7 +81,7 @@ def test_main_window_uses_configured_default_paths(qt_app: QApplication) -> None
         ],
         sync_run_id=sync_run_id,
     )
-    window = MainWindow()
+    window = MainWindow(settings=build_gui_settings(app_paths.data_dir / "gui-settings.ini"))
 
     window.contacts_load_button.click()
     qt_app.processEvents()
@@ -96,7 +98,7 @@ def test_main_window_uses_configured_default_paths(qt_app: QApplication) -> None
 def test_edit_config_updates_main_window_paths(qt_app: QApplication, tmp_path: Path, monkeypatch: object) -> None:
     new_data_dir = tmp_path / "dropbox-data"
     new_credentials = tmp_path / "shared-credentials.json"
-    window = MainWindow()
+    window = MainWindow(settings=build_gui_settings(tmp_path / "gui-settings.ini"))
 
     class FakeDialog:
         def __init__(self, *, app_paths: object, parent: object) -> None:
@@ -130,7 +132,11 @@ def test_edit_config_updates_main_window_paths(qt_app: QApplication, tmp_path: P
 def test_load_contacts_populates_table(qt_app: QApplication, tmp_path: Path) -> None:
     contacts_db = build_contacts_db(tmp_path)
     results_db = tmp_path / "race_results.sqlite3"
-    window = MainWindow(contacts_db_path=contacts_db, results_db_path=results_db)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=results_db,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
 
     window.contacts_load_button.click()
     qt_app.processEvents()
@@ -162,6 +168,7 @@ def test_contacts_view_applies_compact_initial_column_widths(qt_app: QApplicatio
     window = MainWindow(
         contacts_db_path=contacts_db,
         results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
 
     window.contacts_load_button.click()
@@ -184,6 +191,7 @@ def test_export_contacts_json_through_gui(qt_app: QApplication, tmp_path: Path, 
     window = MainWindow(
         contacts_db_path=contacts_db,
         results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
     monkeypatch.setattr(
         "match_my_contacts_gui.main_window.QFileDialog.getSaveFileName",
@@ -204,6 +212,7 @@ def test_list_datasets_populates_table(qt_app: QApplication, tmp_path: Path) -> 
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=build_race_results_db(tmp_path),
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
 
     window.list_datasets_button.click()
@@ -231,6 +240,7 @@ def test_fetch_acn_dataset_through_gui(qt_app: QApplication, tmp_path: Path, mon
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=results_db,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
 
     def fake_fetch_acn_results(*, url: str, db_path: Path, raw_dir: Path) -> RaceFetchStats:
@@ -269,6 +279,7 @@ def test_show_results_populates_table(qt_app: QApplication, tmp_path: Path) -> N
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=build_race_results_db(tmp_path),
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
     window.results_dataset_input.setText("demo-race")
 
@@ -298,6 +309,7 @@ def test_add_dataset_alias_uses_current_dataset(qt_app: QApplication, tmp_path: 
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=results_db,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
 
     window.list_datasets_button.click()
@@ -320,6 +332,7 @@ def test_matching_filters_update_table_without_rerunning(qt_app: QApplication, t
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=build_race_results_db(tmp_path),
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
     window.matching_dataset_input.setText("demo-race")
     fake_report = make_match_report()
@@ -369,7 +382,11 @@ def test_export_matches_csv_through_gui(qt_app: QApplication, tmp_path: Path, mo
     contacts_db = build_contacts_db(tmp_path)
     results_db = build_race_results_db(tmp_path)
     export_path = tmp_path / "exports" / "matches.csv"
-    window = MainWindow(contacts_db_path=contacts_db, results_db_path=results_db)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=results_db,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
     monkeypatch.setattr(
         "match_my_contacts_gui.main_window.QFileDialog.getSaveFileName",
         lambda *args, **kwargs: (str(export_path), "CSV Files (*.csv)"),
@@ -395,6 +412,7 @@ def test_list_datasets_uses_table_presenter(qt_app: QApplication, tmp_path: Path
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=build_race_results_db(tmp_path),
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
     calls: list[int] = []
     initial_headers = table_headers(window.table)
@@ -411,6 +429,204 @@ def test_list_datasets_uses_table_presenter(qt_app: QApplication, tmp_path: Path
     assert calls == [1]
     assert table_headers(window.table) == initial_headers
     assert window.table.rowCount() == initial_rows
+
+    window.close()
+
+
+def test_main_window_exposes_help_menu_actions(qt_app: QApplication, tmp_path: Path) -> None:
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    menu_actions = window.menuBar().actions()
+    assert [action.text() for action in menu_actions] == ["Help"]
+    help_menu = menu_actions[0].menu()
+    assert help_menu is not None
+    assert [action.text() for action in help_menu.actions()] == ["About", "Credits"]
+
+    window.close()
+
+
+def test_main_window_auto_loads_contacts_when_database_exists(qt_app: QApplication, tmp_path: Path) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    qt_app.processEvents()
+
+    assert table_headers(window.table) == [
+        "id",
+        "display_name",
+        "email",
+        "phone",
+        "organization",
+        "aliases",
+        "notes",
+    ]
+    assert window.table.rowCount() == 2
+    assert window.statusBar().currentMessage() == "Loaded 2 contacts."
+
+    window.close()
+
+
+def test_main_window_keeps_placeholder_when_contacts_db_is_missing(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    contacts_db = tmp_path / "missing" / "contacts.sqlite3"
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    qt_app.processEvents()
+
+    assert contacts_db.exists() is False
+    assert window.table.item(0, 0).text() == "No data loaded yet."
+    assert window.statusBar().currentMessage() == "GUI ready."
+
+    window.close()
+
+
+def test_contact_columns_can_be_saved_and_restored(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    settings_path = tmp_path / "gui-settings.ini"
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(settings_path),
+    )
+
+    class FakeDialog:
+        def __init__(self, *, columns: object, visible_column_ids: object, parent: object) -> None:
+            pass
+
+        def exec(self) -> int:
+            return QDialog.DialogCode.Accepted
+
+        def selected_column_ids(self) -> list[str]:
+            return ["display_name", "email", "organization"]
+
+    monkeypatch.setattr("match_my_contacts_gui.main_window.ContactsColumnsDialog", FakeDialog)
+
+    window.contacts_columns_button.click()
+    qt_app.processEvents()
+
+    assert table_headers(window.table) == ["display_name", "email", "organization"]
+    window.close()
+
+    restored_window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(settings_path),
+    )
+
+    assert table_headers(restored_window.table) == ["display_name", "email", "organization"]
+    restored_window.close()
+
+
+def test_double_click_contact_opens_details_dialog(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+    captured: dict[str, object] = {}
+
+    class FakeDialog:
+        def __init__(self, *, contact_details: dict[str, object], parent: object) -> None:
+            captured["contact_details"] = contact_details
+
+        def exec(self) -> int:
+            captured["opened"] = True
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr("match_my_contacts_gui.main_window.ContactDetailsDialog", FakeDialog)
+
+    window.table.selectRow(0)
+    window.table.itemDoubleClicked.emit(window.table.item(0, 0))
+    qt_app.processEvents()
+
+    assert captured["opened"] is True
+    contact_details = captured["contact_details"]
+    assert isinstance(contact_details, dict)
+    assert contact_details["display_name"] == "Alice Example"
+    assert contact_details["raw_json_text"]
+
+    window.close()
+
+
+def test_double_click_non_contacts_does_not_open_details_dialog(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=build_race_results_db(tmp_path),
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+    opened = {"count": 0}
+
+    class FakeDialog:
+        def __init__(self, *, contact_details: dict[str, object], parent: object) -> None:
+            pass
+
+        def exec(self) -> int:
+            opened["count"] += 1
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr("match_my_contacts_gui.main_window.ContactDetailsDialog", FakeDialog)
+
+    window.list_datasets_button.click()
+    qt_app.processEvents()
+    window.table.selectRow(0)
+    window.table.itemDoubleClicked.emit(window.table.item(0, 0))
+    qt_app.processEvents()
+
+    assert opened["count"] == 0
+
+    window.close()
+
+
+def test_import_contacts_csv_through_gui(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    csv_path = tmp_path / "google-contacts.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "Name,Given Name,Family Name,Nickname,Notes,Organization 1 - Name,E-mail 1 - Type,E-mail 1 - Value,Phone 1 - Type,Phone 1 - Value",
+                "Alice Example,Alice,Example,Ali,Fast runner,Acme Running,Home,alice@example.com,Mobile,+32 470 12 34 56",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QFileDialog.getOpenFileName",
+        lambda *args, **kwargs: (str(csv_path), "CSV Files (*.csv)"),
+    )
+
+    window.contacts_import_button.click()
+    qt_app.processEvents()
+
+    assert window.table.rowCount() == 1
+    assert window.table.item(0, 1).text() == "Alice Example"
+    assert "Imported 1 contacts from" in window.statusBar().currentMessage()
+    assert "Showing 1 contacts." in window.statusBar().currentMessage()
 
     window.close()
 
@@ -563,3 +779,9 @@ def make_match_report() -> MatchReport:
 
 def table_headers(table: QTableWidget) -> list[str]:
     return [table.horizontalHeaderItem(index).text() for index in range(table.columnCount())]
+
+
+def build_gui_settings(path: Path) -> QSettings:
+    settings = QSettings(str(path), QSettings.Format.IniFormat)
+    settings.setFallbacksEnabled(False)
+    return settings

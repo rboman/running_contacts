@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -14,8 +16,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QStatusBar,
+    QStyle,
     QTableWidget,
     QTabWidget,
     QVBoxLayout,
@@ -30,6 +34,7 @@ from match_my_contacts.config import (
     write_app_paths,
 )
 from match_my_contacts.contacts.storage import ContactsRepository
+from match_my_contacts.contacts.service import import_google_contacts_csv
 from match_my_contacts.matching.models import MatchReport, MatchResult
 from match_my_contacts.matching.service import (
     export_selected_matches_csv,
@@ -41,13 +46,19 @@ from match_my_contacts.race_results.service import fetch_acn_results
 from match_my_contacts.race_results.storage import RaceResultsRepository
 
 from .state import GuiState, MatchingFilters
+from .contact_details_dialog import ContactDetailsDialog
 from .config_dialog import ConfigDialog
+from .contacts_columns_dialog import ContactsColumnsDialog
+from .icons import apply_action_icon, apply_button_icon, apply_window_icon
 from .table_presenter import TablePresenter
 
 
 DEFAULT_RESULTS_LIMIT = 100
 STATUS_OPTIONS = ("accepted", "ambiguous", "all")
 SORT_OPTIONS = ("position", "time", "athlete", "contact", "team", "score")
+CONTACT_COLUMNS_SETTINGS_KEY = "contacts/visible_columns"
+SETTINGS_ORGANIZATION = "match-my-contacts"
+SETTINGS_APPLICATION = "match-my-contacts-gui"
 
 
 class MainWindow(QMainWindow):
@@ -57,6 +68,7 @@ class MainWindow(QMainWindow):
         contacts_db_path: Path | None = None,
         results_db_path: Path | None = None,
         app_paths: AppPaths | None = None,
+        settings: QSettings | None = None,
     ) -> None:
         super().__init__()
         self.app_paths = app_paths or self._resolve_app_paths(
@@ -65,10 +77,14 @@ class MainWindow(QMainWindow):
         )
         self.contacts_db_path = Path(contacts_db_path or self.app_paths.contacts_db)
         self.results_db_path = Path(results_db_path or self.app_paths.race_results_db)
+        self.settings = settings or QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
         self.state = GuiState()
+        self.visible_contact_column_ids = self._load_visible_contact_column_ids()
 
         self.setWindowTitle("match-my-contacts")
         self.resize(1280, 760)
+        apply_window_icon(self)
+        self._build_menu()
 
         self.contacts_query_input = QLineEdit()
         self.results_url_input = QLineEdit()
@@ -89,7 +105,9 @@ class MainWindow(QMainWindow):
         self.matching_reviewed_only_checkbox = QCheckBox("Reviewed only")
 
         self.contacts_load_button = QPushButton("Load contacts")
+        self.contacts_import_button = QPushButton("Import CSV")
         self.contacts_export_button = QPushButton("Export JSON")
+        self.contacts_columns_button = QPushButton("Columns...")
         self.list_datasets_button = QPushButton("List datasets")
         self.show_results_button = QPushButton("Show results")
         self.fetch_acn_button = QPushButton("Fetch ACN")
@@ -111,6 +129,7 @@ class MainWindow(QMainWindow):
         self.controls_tabs.setMinimumWidth(340)
 
         self.table_presenter = TablePresenter(self.table)
+        self._apply_icons()
 
         central_widget = QWidget()
         layout = QHBoxLayout(central_widget)
@@ -128,7 +147,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("GUI ready.")
 
         self.contacts_load_button.clicked.connect(self.load_contacts)
+        self.contacts_import_button.clicked.connect(self.import_contacts_csv)
         self.contacts_export_button.clicked.connect(self.export_contacts_json)
+        self.contacts_columns_button.clicked.connect(self.edit_contact_columns)
         self.list_datasets_button.clicked.connect(self.list_datasets)
         self.show_results_button.clicked.connect(self.show_results)
         self.fetch_acn_button.clicked.connect(self.fetch_acn_dataset)
@@ -138,6 +159,7 @@ class MainWindow(QMainWindow):
         self.edit_config_button.clicked.connect(self.edit_config)
         self.reload_config_button.clicked.connect(self.reload_config)
         self.table.itemSelectionChanged.connect(self._handle_table_selection_changed)
+        self.table.itemDoubleClicked.connect(self._handle_table_item_double_clicked)
         self.matching_status_combo.currentTextChanged.connect(self.apply_matching_filters)
         self.matching_sort_combo.currentTextChanged.connect(self.apply_matching_filters)
         self.matching_team_input.textChanged.connect(self.apply_matching_filters)
@@ -145,6 +167,7 @@ class MainWindow(QMainWindow):
         self.matching_category_input.textChanged.connect(self.apply_matching_filters)
         self.matching_reviewed_only_checkbox.checkStateChanged.connect(self.apply_matching_filters)
         self._refresh_config_summary()
+        self._auto_load_contacts_on_startup()
 
     def _build_contacts_tab(self) -> QWidget:
         page = QWidget()
@@ -161,7 +184,9 @@ class MainWindow(QMainWindow):
         self.contacts_query_input.setPlaceholderText("Search by name, email, or phone")
         layout.addWidget(self.contacts_query_input)
         layout.addWidget(self.contacts_load_button)
+        layout.addWidget(self.contacts_import_button)
         layout.addWidget(self.contacts_export_button)
+        layout.addWidget(self.contacts_columns_button)
         return section
 
     def _build_race_results_tab(self) -> QWidget:
@@ -249,12 +274,32 @@ class MainWindow(QMainWindow):
 
     def load_contacts(self) -> None:
         try:
-            repository = ContactsRepository(self.contacts_db_path)
-            repository.initialize()
-            query = self._clean_text(self.contacts_query_input.text())
-            contacts = repository.list_contacts(query=query)
-            self.table_presenter.show_contacts(contacts)
-            self.statusBar().showMessage(f"Loaded {len(contacts)} contacts.")
+            contact_count = self._load_contacts_into_table()
+            self.statusBar().showMessage(f"Loaded {contact_count} contacts.")
+        except Exception as exc:
+            self._show_error(exc)
+
+    def import_contacts_csv(self) -> None:
+        try:
+            selected_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Import Google Contacts CSV",
+                str(self.app_paths.data_dir),
+                "CSV Files (*.csv)",
+            )
+            if not selected_path:
+                self.statusBar().showMessage("CSV import cancelled.")
+                return
+            csv_path = Path(selected_path)
+            stats = import_google_contacts_csv(
+                csv_path=csv_path,
+                db_path=self.contacts_db_path,
+            )
+            contact_count = self._load_contacts_into_table()
+            self.statusBar().showMessage(
+                f"Imported {stats.written_count} contacts from {csv_path}. "
+                f"Showing {contact_count} contacts."
+            )
         except Exception as exc:
             self._show_error(exc)
 
@@ -275,6 +320,22 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Exported contacts to {export_path}.")
         except Exception as exc:
             self._show_error(exc)
+
+    def edit_contact_columns(self) -> None:
+        dialog = ContactsColumnsDialog(
+            columns=TablePresenter.contact_columns(),
+            visible_column_ids=self.visible_contact_column_ids,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            self.statusBar().showMessage("Contact columns edit cancelled.")
+            return
+        self.visible_contact_column_ids = dialog.selected_column_ids()
+        self._save_visible_contact_column_ids()
+        contact_count = self._load_contacts_into_table()
+        self.statusBar().showMessage(
+            f"Updated contact columns. Showing {contact_count} contacts."
+        )
 
     def list_datasets(self) -> None:
         try:
@@ -471,6 +532,21 @@ class MainWindow(QMainWindow):
             if not self.matching_dataset_input.text().strip():
                 self.matching_dataset_input.setText(dataset_text)
 
+    def _handle_table_item_double_clicked(self, _: object) -> None:
+        if self.table_presenter.current_view_name != "contacts":
+            return
+        metadata = self.table_presenter.current_row_metadata()
+        if not metadata or metadata.get("contact_id") is None:
+            return
+        try:
+            repository = ContactsRepository(self.contacts_db_path)
+            repository.initialize()
+            contact_details = repository.get_contact_details(contact_id=int(metadata["contact_id"]))
+            dialog = ContactDetailsDialog(contact_details=contact_details, parent=self)
+            dialog.exec()
+        except Exception as exc:
+            self._show_error(exc)
+
     def _select_dataset_row(self, dataset_id: int | None) -> None:
         if dataset_id is None:
             return
@@ -570,3 +646,152 @@ class MainWindow(QMainWindow):
 
     def _show_error(self, exc: Exception) -> None:
         self.statusBar().showMessage(f"Error: {exc}")
+
+    def _build_menu(self) -> None:
+        self.help_menu = self.menuBar().addMenu("Help")
+        self.about_action = QAction("About", self)
+        self.credits_action = QAction("Credits", self)
+        self.about_action.triggered.connect(self.show_about_dialog)
+        self.credits_action.triggered.connect(self.show_credits_dialog)
+        self.help_menu.addAction(self.about_action)
+        self.help_menu.addAction(self.credits_action)
+
+    def _apply_icons(self) -> None:
+        apply_button_icon(
+            self.contacts_load_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_BrowserReload,
+        )
+        apply_button_icon(
+            self.contacts_import_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_DialogOpenButton,
+        )
+        apply_button_icon(
+            self.contacts_export_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_DialogSaveButton,
+        )
+        apply_button_icon(
+            self.contacts_columns_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_FileDialogDetailedView,
+        )
+        apply_button_icon(
+            self.list_datasets_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_FileDialogContentsView,
+        )
+        apply_button_icon(
+            self.show_results_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_FileDialogListView,
+        )
+        apply_button_icon(
+            self.fetch_acn_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_ArrowDown,
+        )
+        apply_button_icon(
+            self.add_alias_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_FileDialogNewFolder,
+        )
+        apply_button_icon(
+            self.run_matching_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_MediaPlay,
+        )
+        apply_button_icon(
+            self.export_matches_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_DialogSaveButton,
+        )
+        apply_button_icon(
+            self.edit_config_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_FileDialogDetailedView,
+        )
+        apply_button_icon(
+            self.reload_config_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_BrowserReload,
+        )
+        apply_action_icon(
+            self.about_action,
+            owner=self,
+            standard_pixmap=QStyle.StandardPixmap.SP_MessageBoxInformation,
+        )
+        apply_action_icon(
+            self.credits_action,
+            owner=self,
+            standard_pixmap=QStyle.StandardPixmap.SP_DialogHelpButton,
+        )
+
+    def _load_contacts_into_table(self) -> int:
+        repository = ContactsRepository(self.contacts_db_path)
+        repository.initialize()
+        query = self._clean_text(self.contacts_query_input.text())
+        contacts = repository.list_contacts(query=query)
+        self.table_presenter.show_contacts(
+            contacts,
+            visible_column_ids=self.visible_contact_column_ids,
+        )
+        return len(contacts)
+
+    def _auto_load_contacts_on_startup(self) -> None:
+        if not self.contacts_db_path.exists():
+            return
+        try:
+            contact_count = self._load_contacts_into_table()
+        except Exception as exc:
+            self._show_error(exc)
+            return
+        if contact_count > 0:
+            self.statusBar().showMessage(f"Loaded {contact_count} contacts.")
+        else:
+            self.table_presenter.show_placeholder("No data loaded yet.")
+            self.statusBar().showMessage("GUI ready.")
+
+    def _load_visible_contact_column_ids(self) -> list[str]:
+        default_ids = [
+            column.key
+            for column in TablePresenter.contact_columns()
+            if column.default_visible
+        ]
+        raw_value = self.settings.value(CONTACT_COLUMNS_SETTINGS_KEY)
+        if raw_value is None:
+            return default_ids
+        try:
+            if isinstance(raw_value, str):
+                stored_ids = json.loads(raw_value)
+            elif isinstance(raw_value, list):
+                stored_ids = raw_value
+            else:
+                return default_ids
+        except json.JSONDecodeError:
+            return default_ids
+        if not isinstance(stored_ids, list):
+            return default_ids
+        stored_set = {str(column_id) for column_id in stored_ids}
+        resolved_ids = [
+            column.key
+            for column in TablePresenter.contact_columns()
+            if column.key in stored_set
+        ]
+        return resolved_ids or default_ids
+
+    def _save_visible_contact_column_ids(self) -> None:
+        self.settings.setValue(
+            CONTACT_COLUMNS_SETTINGS_KEY,
+            json.dumps(self.visible_contact_column_ids),
+        )
+        self.settings.sync()
+
+    def show_about_dialog(self) -> None:
+        QMessageBox.about(
+            self,
+            "About match-my-contacts",
+            (
+                "match-my-contacts is a local desktop tool for browsing contacts, "
+                "importing race results, and reviewing matches."
+            ),
+        )
+
+    def show_credits_dialog(self) -> None:
+        QMessageBox.information(
+            self,
+            "Credits",
+            (
+                "Built with PySide6 on top of the local-first match-my-contacts "
+                "storage and matching services."
+            ),
+        )

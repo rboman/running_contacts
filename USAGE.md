@@ -90,10 +90,13 @@ match-my-contacts-gui
 The GUI is intentionally simple, but already useful:
 
 - it keeps the CLI unchanged,
-- it loads contacts and exports them to JSON,
+- it auto-loads local contacts when the SQLite cache already exists,
+- it imports Google Contacts CSV exports, loads contacts, and exports them to JSON,
+- it lets you choose the visible contact columns and open a detailed contact dialog on double-click,
 - it fetches ACN races, lists datasets, shows results, and adds dataset aliases,
 - it runs matching, applies filters, and exports the visible CSV selection,
 - it shows and edits the local configuration, including the shared data directory and optional `credentials.json` path,
+- it exposes a small `Help` menu with `About` and `Credits`,
 - it still leaves Google sync and manual review workflows to the CLI for now.
 
 Recommended daily GUI workflow:
@@ -104,7 +107,10 @@ match-my-contacts-gui
 
 Then:
 
-- load contacts when you want to inspect the local cache,
+- review the auto-loaded contacts table or click `Load contacts` if needed,
+- use `Import CSV` for a Google Contacts export when you want a local snapshot without the API sync flow,
+- use `Columns...` to reduce the contacts table to the fields you care about,
+- double-click a contact row to inspect the full stored payload and DB metadata,
 - fetch a race from its ACN URL,
 - add a short alias to the dataset,
 - run matching on that alias,
@@ -255,3 +261,33 @@ match-my-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --co
 ## Current priority
 
 The current matching quality is considered good enough for now. The next development priority is to extend the PySide6 GUI toward review workflows rather than changing the matching engine itself.
+
+## GUI updates
+
+Recent GUI additions:
+
+- local contacts now auto-load on startup when the contacts SQLite file already exists
+- `Contacts` now supports Google Contacts CSV imports from the desktop UI
+- the contacts table now supports persistent visible-column preferences via Qt settings
+- double-clicking a contact row opens a read-only details dialog with DB metadata and raw JSON
+- the desktop window now exposes a small `Help` menu with `About` and `Credits`
+
+Current CSV assumption:
+
+- the GUI import only targets the Google Contacts CSV export format for now
+- no generic CSV mapping wizard has been added yet
+
+## GUI updates
+
+Recent GUI additions:
+
+- local contacts now auto-load on startup when the contacts SQLite file already exists
+- `Contacts` now supports Google Contacts CSV imports from the desktop UI
+- the contacts table now supports persistent visible-column preferences via Qt settings
+- double-clicking a contact row opens a read-only details dialog with DB metadata and raw JSON
+- the desktop window now exposes a small `Help` menu with `About` and `Credits`
+
+Current CSV assumption:
+
+- the GUI import only targets the Google Contacts CSV export format for now
+- no generic CSV mapping wizard has been added yet

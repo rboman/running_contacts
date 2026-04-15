@@ -112,3 +112,32 @@ def test_aliases_can_be_added_listed_and_removed(tmp_path: Path) -> None:
     assert aliases[0]["alias_text"] == "Alice Ex"
     assert repository.get_contact(contact_id=contact["id"])["aliases"] == ["Alice Ex"]
     assert repository.remove_alias(contact_id=contact["id"], alias_text="Alice Ex") is True
+
+
+def test_get_contact_details_returns_enriched_fields(tmp_path: Path) -> None:
+    repository = ContactsRepository(tmp_path / "contacts.sqlite3")
+    repository.initialize()
+
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[make_contact("people/1", "Alice Example", email="alice@example.com")],
+        sync_run_id=sync_run_id,
+    )
+
+    contact = repository.list_contacts()[0]
+    repository.add_alias(contact_id=contact["id"], alias_text="Alice Ex")
+
+    details = repository.get_contact_details(contact_id=contact["id"])
+
+    assert details["source"] == "google_people"
+    assert details["source_contact_id"] == "people/1"
+    assert details["created_at"]
+    assert details["updated_at"]
+    assert details["raw_json"]["resourceName"] == "people/1"
+    assert details["raw_json_text"]
+    assert details["methods"][0]["created_at"]
+    assert details["methods"][0]["is_primary"] is True
+    assert details["alias_records"][0]["alias_text"] == "Alice Ex"
+    assert details["aliases"] == ["Alice Ex"]

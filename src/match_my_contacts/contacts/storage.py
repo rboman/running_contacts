@@ -241,6 +241,34 @@ class ContactsRepository:
                 raise KeyError(f"Contact {contact_id} not found")
             return self._row_to_contact_summary(conn, contact_id, dict(row))
 
+    def get_contact_details(self, *, contact_id: int) -> dict[str, Any]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT c.id,
+                       c.source,
+                       c.source_account,
+                       c.source_contact_id,
+                       c.display_name,
+                       c.given_name,
+                       c.family_name,
+                       c.nickname,
+                       c.organization,
+                       c.notes,
+                       c.active,
+                       c.last_seen_sync_id,
+                       c.raw_json,
+                       c.created_at,
+                       c.updated_at
+                FROM contacts AS c
+                WHERE c.id = ?
+                """,
+                (contact_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Contact {contact_id} not found")
+            return self._row_to_contact_details(conn, contact_id, dict(row))
+
     def add_alias(self, *, contact_id: int, alias_text: str) -> None:
         normalized_alias = normalize_person_name(alias_text)
         if not normalized_alias:
@@ -373,16 +401,60 @@ class ContactsRepository:
         contact_id: int,
         row: dict[str, Any],
     ) -> dict[str, Any]:
-        methods = conn.execute(
-            """
-            SELECT kind, label, value, normalized_value, is_primary
+        row["active"] = bool(row["active"])
+        row["methods"] = self._fetch_contact_methods(conn, contact_id=contact_id)
+        row["aliases"] = self._fetch_contact_aliases(conn, contact_id=contact_id)
+        return row
+
+    def _row_to_contact_details(
+        self,
+        conn: sqlite3.Connection,
+        contact_id: int,
+        row: dict[str, Any],
+    ) -> dict[str, Any]:
+        raw_json_text = str(row.get("raw_json") or "")
+        row["active"] = bool(row["active"])
+        row["methods"] = self._fetch_contact_methods(conn, contact_id=contact_id, include_metadata=True)
+        row["aliases"] = self._fetch_contact_aliases(conn, contact_id=contact_id)
+        row["alias_records"] = self._fetch_contact_alias_records(conn, contact_id=contact_id)
+        row["raw_json_text"] = raw_json_text
+        try:
+            row["raw_json"] = json.loads(raw_json_text)
+        except json.JSONDecodeError:
+            row["raw_json"] = raw_json_text
+        return row
+
+    def _fetch_contact_methods(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        contact_id: int,
+        include_metadata: bool = False,
+    ) -> list[dict[str, Any]]:
+        columns = "kind, label, value, normalized_value, is_primary"
+        if include_metadata:
+            columns = f"id, {columns}, created_at"
+        rows = conn.execute(
+            f"""
+            SELECT {columns}
             FROM contact_methods
             WHERE contact_id = ?
             ORDER BY kind, is_primary DESC, value COLLATE NOCASE
             """,
             (contact_id,),
         ).fetchall()
-        aliases = conn.execute(
+        methods = [dict(row) for row in rows]
+        for method in methods:
+            method["is_primary"] = bool(method["is_primary"])
+        return methods
+
+    def _fetch_contact_aliases(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        contact_id: int,
+    ) -> list[str]:
+        rows = conn.execute(
             """
             SELECT alias_text
             FROM contact_aliases
@@ -391,10 +463,24 @@ class ContactsRepository:
             """,
             (contact_id,),
         ).fetchall()
-        row["active"] = bool(row["active"])
-        row["methods"] = [dict(method) for method in methods]
-        row["aliases"] = [alias["alias_text"] for alias in aliases]
-        return row
+        return [str(alias["alias_text"]) for alias in rows]
+
+    def _fetch_contact_alias_records(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        contact_id: int,
+    ) -> list[dict[str, Any]]:
+        rows = conn.execute(
+            """
+            SELECT id, alias_text, normalized_alias, created_at
+            FROM contact_aliases
+            WHERE contact_id = ?
+            ORDER BY alias_text COLLATE NOCASE
+            """,
+            (contact_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)

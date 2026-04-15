@@ -44,6 +44,7 @@ def main() -> int:
 
     application = QApplication.instance() or QApplication(sys.argv)
     window = MainWindow()
+    application.setWindowIcon(window.windowIcon())
     window.show()
     return application.exec()
 

@@ -24,8 +24,27 @@ class TableView:
     stretch_column: int | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class ContactColumnDefinition:
+    key: str
+    header: str
+    width: int
+    default_visible: bool = True
+    stretch: bool = False
+
+
 class TablePresenter:
     """Centralize all table transformations and QTableWidget population."""
+
+    CONTACT_COLUMNS: tuple[ContactColumnDefinition, ...] = (
+        ContactColumnDefinition("id", "id", 60),
+        ContactColumnDefinition("display_name", "display_name", 180),
+        ContactColumnDefinition("email", "email", 220),
+        ContactColumnDefinition("phone", "phone", 150),
+        ContactColumnDefinition("organization", "organization", 180),
+        ContactColumnDefinition("aliases", "aliases", 180),
+        ContactColumnDefinition("notes", "notes", 260, stretch=True),
+    )
 
     def __init__(self, table: QTableWidget) -> None:
         self.table = table
@@ -41,10 +60,16 @@ class TablePresenter:
             )
         )
 
-    def show_contacts(self, contacts: list[dict[str, Any]]) -> None:
+    def show_contacts(
+        self,
+        contacts: list[dict[str, Any]],
+        *,
+        visible_column_ids: list[str] | None = None,
+    ) -> None:
+        columns = self._resolve_contact_columns(visible_column_ids)
         rows = tuple(
             TableRow(
-                cells=self._contact_row(contact),
+                cells=tuple(self._contact_cell_values(contact, columns)),
                 metadata={"view": "contacts", "contact_id": int(contact["id"])},
             )
             for contact in contacts
@@ -52,10 +77,10 @@ class TablePresenter:
         self._render(
             TableView(
                 name="contacts",
-                headers=("id", "display_name", "email", "phone", "organization", "aliases", "notes"),
+                headers=tuple(column.header for column in columns),
                 rows=rows,
-                initial_widths=(60, 180, 220, 150, 180, 180, 260),
-                stretch_column=6,
+                initial_widths=tuple(column.width for column in columns),
+                stretch_column=self._stretch_column_index(columns),
             )
         )
 
@@ -148,6 +173,10 @@ class TablePresenter:
     def current_view_name(self) -> str:
         return self._current_view_name
 
+    @classmethod
+    def contact_columns(cls) -> tuple[ContactColumnDefinition, ...]:
+        return cls.CONTACT_COLUMNS
+
     def _render(self, view: TableView) -> None:
         self._current_view_name = view.name
         header = self.table.horizontalHeader()
@@ -217,7 +246,7 @@ class TablePresenter:
         )
 
     @staticmethod
-    def _contact_row(contact: dict[str, Any]) -> tuple[str, ...]:
+    def _contact_data(contact: dict[str, Any]) -> dict[str, str]:
         email_values = [
             str(method["value"])
             for method in contact.get("methods", [])
@@ -230,15 +259,15 @@ class TablePresenter:
         ]
         aliases = ", ".join(str(alias) for alias in contact.get("aliases", []))
         notes = str(contact.get("notes", "") or "").replace("\n", " ").strip()
-        return (
-            str(contact.get("id", "")),
-            str(contact.get("display_name", "")),
-            ", ".join(email_values),
-            ", ".join(phone_values),
-            str(contact.get("organization", "") or ""),
-            aliases,
-            notes,
-        )
+        return {
+            "id": str(contact.get("id", "")),
+            "display_name": str(contact.get("display_name", "")),
+            "email": ", ".join(email_values),
+            "phone": ", ".join(phone_values),
+            "organization": str(contact.get("organization", "") or ""),
+            "aliases": aliases,
+            "notes": notes,
+        }
 
     @staticmethod
     def _dataset_row(dataset: dict[str, Any]) -> tuple[str, ...]:
@@ -291,3 +320,32 @@ class TablePresenter:
             str(review.get("note", "") or ""),
             str(review.get("updated_at", "") or ""),
         )
+
+    @classmethod
+    def _resolve_contact_columns(
+        cls,
+        visible_column_ids: list[str] | None,
+    ) -> tuple[ContactColumnDefinition, ...]:
+        if not visible_column_ids:
+            return tuple(column for column in cls.CONTACT_COLUMNS if column.default_visible)
+        selected = set(visible_column_ids)
+        resolved = tuple(column for column in cls.CONTACT_COLUMNS if column.key in selected)
+        if resolved:
+            return resolved
+        return tuple(column for column in cls.CONTACT_COLUMNS if column.default_visible)
+
+    @classmethod
+    def _stretch_column_index(cls, columns: tuple[ContactColumnDefinition, ...]) -> int | None:
+        for index, column in enumerate(columns):
+            if column.stretch:
+                return index
+        return None
+
+    @classmethod
+    def _contact_cell_values(
+        cls,
+        contact: dict[str, Any],
+        columns: tuple[ContactColumnDefinition, ...],
+    ) -> tuple[str, ...]:
+        contact_data = cls._contact_data(contact)
+        return tuple(contact_data.get(column.key, "") for column in columns)
