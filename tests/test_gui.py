@@ -20,6 +20,7 @@ from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QDialog, QGroupBox, QMessageBox, QStatusBar, QTableWidget
 
 from match_my_contacts.config import AppPaths, get_app_paths
+from match_my_contacts_gui.config_dialog import ConfigDialog
 from match_my_contacts_gui.main_window import MainWindow
 
 
@@ -101,7 +102,7 @@ def test_edit_config_updates_main_window_paths(qt_app: QApplication, tmp_path: P
     window = MainWindow(settings=build_gui_settings(tmp_path / "gui-settings.ini"))
 
     class FakeDialog:
-        def __init__(self, *, app_paths: object, parent: object) -> None:
+        def __init__(self, *, app_paths: object, parent: object, settings: object | None = None) -> None:
             pass
 
         def exec(self) -> int:
@@ -449,8 +450,6 @@ def test_main_window_exposes_help_menu_actions(qt_app: QApplication, tmp_path: P
     window.close()
 
 
-
-
 def test_help_dialogs_include_repository_and_credits_links(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -485,7 +484,93 @@ def test_help_dialogs_include_repository_and_credits_links(
     assert "OpenAI Codex" in captured["credits_text"]
 
     window.close()
+def test_file_dialogs_remember_last_directory_in_main_window(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    settings = build_gui_settings(tmp_path / "gui-settings.ini")
+    remembered_dir = tmp_path / "remembered"
+    remembered_dir.mkdir()
+    selected_csv = remembered_dir / "retro-contacts.csv"
+    selected_csv.write_text("not-used", encoding="utf-8")
+    export_path = remembered_dir / "contacts.json"
+    calls: list[str] = []
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=settings,
+    )
 
+    def fake_open_file_name(parent: object, title: str, directory: str, file_filter: str):
+        calls.append(directory)
+        return (str(selected_csv), "CSV Files (*.csv)")
+
+    def fake_save_file_name(parent: object, title: str, directory: str, file_filter: str):
+        calls.append(directory)
+        return (str(export_path), "JSON Files (*.json)")
+
+    monkeypatch.setattr("match_my_contacts_gui.main_window.QFileDialog.getOpenFileName", fake_open_file_name)
+    monkeypatch.setattr("match_my_contacts_gui.main_window.QFileDialog.getSaveFileName", fake_save_file_name)
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.import_google_contacts_csv",
+        lambda **kwargs: type(
+            "Stats",
+            (),
+            {"fetched_count": 0, "written_count": 0, "deactivated_count": 0},
+        )(),
+    )
+
+    window.contacts_import_button.click()
+    qt_app.processEvents()
+    window.contacts_export_button.click()
+    qt_app.processEvents()
+    window.contacts_export_button.click()
+    qt_app.processEvents()
+
+    assert Path(calls[0]) == tmp_path
+    assert Path(calls[1]) == (tmp_path / "exports")
+    assert Path(calls[2]) == export_path.parent
+    assert settings.value("file_dialogs/contacts_import_csv") == str(remembered_dir)
+    assert settings.value("file_dialogs/contacts_export_json") == str(export_path.parent)
+
+    window.close()
+
+
+def test_config_dialog_remembers_last_directories(tmp_path: Path, monkeypatch: object) -> None:
+    settings = build_gui_settings(tmp_path / "gui-settings.ini")
+    app_paths = AppPaths(data_dir=tmp_path / "data")
+    data_dir_choice = tmp_path / "dropbox-data"
+    data_dir_choice.mkdir()
+    credentials_choice = tmp_path / "shared" / "credentials.json"
+    credentials_choice.parent.mkdir()
+    credentials_choice.write_text("{}", encoding="utf-8")
+    calls: list[str] = []
+    dialog = ConfigDialog(app_paths=app_paths, settings=settings)
+
+    def fake_get_existing_directory(parent: object, title: str, directory: str) -> str:
+        calls.append(directory)
+        return str(data_dir_choice)
+
+    def fake_get_open_file_name(parent: object, title: str, directory: str, file_filter: str):
+        calls.append(directory)
+        return (str(credentials_choice), "JSON Files (*.json)")
+
+    monkeypatch.setattr(
+        "match_my_contacts_gui.config_dialog.QFileDialog.getExistingDirectory",
+        fake_get_existing_directory,
+    )
+    monkeypatch.setattr(
+        "match_my_contacts_gui.config_dialog.QFileDialog.getOpenFileName",
+        fake_get_open_file_name,
+    )
+
+    dialog._choose_data_dir()
+    dialog._choose_credentials_file()
+
+    assert Path(calls[0]) == app_paths.data_dir
+    assert Path(calls[1]) == app_paths.data_dir
+    assert settings.value("file_dialogs/config_data_dir") == str(data_dir_choice)
+    assert settings.value("file_dialogs/config_credentials_file") == str(credentials_choice.parent)
 def test_main_window_sets_tooltips_on_main_actions(qt_app: QApplication, tmp_path: Path) -> None:
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
@@ -496,6 +581,8 @@ def test_main_window_sets_tooltips_on_main_actions(qt_app: QApplication, tmp_pat
     assert "Reload contacts" in window.contacts_load_button.toolTip()
     assert "Sync Google Contacts" in window.contacts_sync_button.toolTip()
     assert "Google Contacts CSV" in window.contacts_import_button.toolTip()
+    assert "Delete all local contacts" in window.contacts_empty_button.toolTip()
+    assert "Run SQLite VACUUM" in window.contacts_vacuum_button.toolTip()
     assert "ACN Timing URL" in window.results_url_input.toolTip()
     assert "Double-click a contact row" in window.table.toolTip()
     assert "short description" in window.about_action.toolTip()
@@ -655,18 +742,8 @@ def test_double_click_non_contacts_does_not_open_details_dialog(
 
 
 def test_import_contacts_csv_through_gui(
-    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object, google_contacts_csv_path: Path
 ) -> None:
-    csv_path = tmp_path / "google-contacts.csv"
-    csv_path.write_text(
-        "\n".join(
-            [
-                "Name,Given Name,Family Name,Nickname,Notes,Organization 1 - Name,E-mail 1 - Type,E-mail 1 - Value,Phone 1 - Type,Phone 1 - Value",
-                "Alice Example,Alice,Example,Ali,Fast runner,Acme Running,Home,alice@example.com,Mobile,+32 470 12 34 56",
-            ]
-        ),
-        encoding="utf-8",
-    )
     window = MainWindow(
         contacts_db_path=tmp_path / "contacts.sqlite3",
         results_db_path=tmp_path / "race_results.sqlite3",
@@ -674,16 +751,16 @@ def test_import_contacts_csv_through_gui(
     )
     monkeypatch.setattr(
         "match_my_contacts_gui.main_window.QFileDialog.getOpenFileName",
-        lambda *args, **kwargs: (str(csv_path), "CSV Files (*.csv)"),
+        lambda *args, **kwargs: (str(google_contacts_csv_path), "CSV Files (*.csv)"),
     )
 
     window.contacts_import_button.click()
     qt_app.processEvents()
 
-    assert window.table.rowCount() == 1
-    assert window.table.item(0, 1).text() == "Alice Example"
-    assert "Imported 1 contacts from" in window.statusBar().currentMessage()
-    assert "Showing 1 contacts." in window.statusBar().currentMessage()
+    assert window.table.rowCount() == 10
+    assert window.table.item(0, 1).text() == "Actarus Vega"
+    assert "Imported 10 contacts from" in window.statusBar().currentMessage()
+    assert "Showing 10 contacts." in window.statusBar().currentMessage()
 
     window.close()
 
@@ -701,6 +778,7 @@ def test_sync_google_contacts_through_gui(
         app_paths=app_paths,
         settings=build_gui_settings(tmp_path / "gui-settings.ini"),
     )
+    captured: dict[str, str] = {}
 
     def fake_sync_google_contacts(
         *,
@@ -734,6 +812,10 @@ def test_sync_google_contacts_through_gui(
         })()
 
     monkeypatch.setattr("match_my_contacts_gui.main_window.sync_google_contacts", fake_sync_google_contacts)
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QMessageBox.information",
+        lambda parent, title, text: captured.update(title=title, text=text),
+    )
 
     window.contacts_sync_button.click()
     qt_app.processEvents()
@@ -741,6 +823,147 @@ def test_sync_google_contacts_through_gui(
     assert window.table.rowCount() == 1
     assert window.table.item(0, 1).text() == "Alice Example"
     assert "Synced Google contacts: 1 fetched, 1 written, 0 deactivated." in window.statusBar().currentMessage()
+    assert captured["title"] == "Google Sync Completed"
+    assert "Source: google_people/default" in captured["text"]
+    assert "Visible contacts: 1" in captured["text"]
+
+    window.close()
+
+
+def test_sync_google_contacts_shows_error_dialog_on_failure(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    credentials_path = tmp_path / "credentials.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+    app_paths = AppPaths(data_dir=tmp_path, credentials_path=credentials_path)
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=tmp_path / "race_results.sqlite3",
+        app_paths=app_paths,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+    captured: dict[str, str] = {}
+
+    def fake_sync_google_contacts(**_: object) -> object:
+        raise RuntimeError("network exploded")
+
+    monkeypatch.setattr("match_my_contacts_gui.main_window.sync_google_contacts", fake_sync_google_contacts)
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QMessageBox.critical",
+        lambda parent, title, text: captured.update(title=title, text=text),
+    )
+
+    window.contacts_sync_button.click()
+    qt_app.processEvents()
+
+    assert captured["title"] == "Google Sync Failed"
+    assert captured["text"] == "network exploded"
+    assert window.statusBar().currentMessage() == "Error: network exploded"
+
+    window.close()
+
+
+def test_empty_contacts_database_can_be_cancelled_from_gui(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    results_db = build_race_results_db(tmp_path)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=results_db,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QMessageBox.warning",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Cancel,
+    )
+
+    window.contacts_empty_button.click()
+    qt_app.processEvents()
+
+    repository = ContactsRepository(contacts_db)
+    repository.initialize()
+
+    assert window.statusBar().currentMessage() == "Empty DB cancelled."
+    assert repository.list_contacts() != []
+
+    window.close()
+
+
+def test_empty_contacts_database_through_gui_clears_contacts_and_reviews(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    results_db = build_race_results_db(tmp_path)
+    results_repository = RaceResultsRepository(results_db)
+    results_repository.initialize()
+    dataset_id = results_repository.resolve_dataset_selector("demo-race")
+    result_id = results_repository.list_results(dataset_id=dataset_id, limit=1)[0]["id"]
+    results_repository.set_match_review(
+        dataset_id=dataset_id,
+        result_id=result_id,
+        status="accepted",
+        contact_id=1,
+        note="clear me",
+    )
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=results_db,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QMessageBox.warning",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Ok,
+    )
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QMessageBox.information",
+        lambda parent, title, text: captured.update(title=title, text=text),
+    )
+
+    window.contacts_empty_button.click()
+    qt_app.processEvents()
+
+    contacts_repository = ContactsRepository(contacts_db)
+    contacts_repository.initialize()
+    results_repository = RaceResultsRepository(results_db)
+    results_repository.initialize()
+
+    assert window.table.item(0, 0).text() == "No data loaded yet."
+    assert captured["title"] == "Empty DB Completed"
+    assert "Contacts deleted: 2" in captured["text"]
+    assert "Matching reviews deleted: 1" in captured["text"]
+    assert contacts_repository.list_contacts(include_inactive=True) == []
+    assert results_repository.list_match_reviews(dataset_id=dataset_id) == []
+
+    window.close()
+
+
+def test_vacuum_contacts_database_through_gui(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    contacts_db = build_contacts_db(tmp_path)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        "match_my_contacts_gui.main_window.QMessageBox.information",
+        lambda parent, title, text: captured.update(title=title, text=text),
+    )
+
+    window.contacts_vacuum_button.click()
+    qt_app.processEvents()
+
+    assert captured["title"] == "VACUUM Completed"
+    assert "SQLite VACUUM completed successfully." in captured["text"]
+    assert "Reclaimed:" in captured["text"]
+    assert "VACUUM completed:" in window.statusBar().currentMessage()
 
     window.close()
 

@@ -122,6 +122,36 @@ class ContactsRepository:
                 ),
             )
 
+    def empty_database(self) -> dict[str, int | bool]:
+        with self._connect() as conn:
+            counts_row = conn.execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM contacts) AS contacts_deleted,
+                    (SELECT COUNT(*) FROM contact_methods) AS methods_deleted,
+                    (SELECT COUNT(*) FROM contact_aliases) AS aliases_deleted,
+                    (SELECT COUNT(*) FROM sync_runs) AS sync_runs_deleted
+                """
+            ).fetchone()
+            counts = dict(counts_row)
+
+            conn.execute("DELETE FROM contacts")
+            conn.execute("DELETE FROM sync_runs")
+            conn.execute(
+                """
+                DELETE FROM sqlite_sequence
+                WHERE name IN ('contacts', 'contact_methods', 'contact_aliases', 'sync_runs')
+                """
+            )
+
+        counts["ids_reset"] = True
+        return counts
+
+    def vacuum(self) -> None:
+        self.initialize()
+        with self._connect() as conn:
+            conn.execute("VACUUM")
+
     def replace_contacts(
         self,
         *,

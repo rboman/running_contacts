@@ -9,16 +9,28 @@ from pathlib import Path
 
 from match_my_contacts.config import AppPaths, default_credentials_path
 
-from .models import ContactMethod, ContactRecord
+from .models import ContactMethod, ContactRecord, EmptyContactsDbStats, VacuumDbStats
 from .normalization import normalize_email, normalize_phone
 from .google_people import fetch_google_contacts
 from .models import SyncStats
 from .sources import GOOGLE_CONTACTS_CSV_SOURCE, GOOGLE_PEOPLE_SOURCE
 from .storage import ContactsRepository
+from match_my_contacts.race_results.storage import RaceResultsRepository
 
 GOOGLE_CSV_SOURCE = GOOGLE_CONTACTS_CSV_SOURCE
-_GOOGLE_MULTI_VALUE_RE = re.compile(r"^(E-mail|Phone) (\d+) - (Type|Value)$")
-_GOOGLE_ORGANIZATION_NAME_RE = re.compile(r"^Organization (\d+) - Name$")
+_GOOGLE_MULTI_VALUE_RE = re.compile(r"^(E-mail|Phone) (\d+) - (Label|Value)$")
+_GOOGLE_REQUIRED_HEADERS = (
+    "First Name",
+    "Middle Name",
+    "Last Name",
+    "Nickname",
+    "Organization Name",
+    "Notes",
+    "E-mail 1 - Label",
+    "E-mail 1 - Value",
+    "Phone 1 - Label",
+    "Phone 1 - Value",
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -134,6 +146,43 @@ def import_google_contacts_csv(
     return stats
 
 
+def empty_contacts_database(
+    *,
+    db_path: Path,
+    results_db_path: Path,
+) -> EmptyContactsDbStats:
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    counts = repository.empty_database()
+
+    match_reviews_deleted = 0
+    if results_db_path.exists():
+        results_repository = RaceResultsRepository(results_db_path)
+        results_repository.initialize()
+        match_reviews_deleted = results_repository.clear_all_match_reviews()
+
+    return EmptyContactsDbStats(
+        contacts_deleted=int(counts["contacts_deleted"]),
+        methods_deleted=int(counts["methods_deleted"]),
+        aliases_deleted=int(counts["aliases_deleted"]),
+        sync_runs_deleted=int(counts["sync_runs_deleted"]),
+        match_reviews_deleted=match_reviews_deleted,
+        ids_reset=bool(counts["ids_reset"]),
+    )
+
+
+def vacuum_contacts_database(*, db_path: Path) -> VacuumDbStats:
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    before_size_bytes = db_path.stat().st_size if db_path.exists() else 0
+    repository.vacuum()
+    after_size_bytes = db_path.stat().st_size if db_path.exists() else 0
+    return VacuumDbStats(
+        before_size_bytes=before_size_bytes,
+        after_size_bytes=after_size_bytes,
+    )
+
+
 def load_google_contacts_csv(
     *,
     csv_path: Path,
@@ -143,9 +192,13 @@ def load_google_contacts_csv(
         reader = csv.DictReader(handle)
         if not reader.fieldnames:
             raise ValueError(f"CSV file is empty: {csv_path}")
-        if "Name" not in reader.fieldnames:
+        fieldnames = [str(fieldname).strip() for fieldname in reader.fieldnames]
+        missing_headers = [header for header in _GOOGLE_REQUIRED_HEADERS if header not in fieldnames]
+        if missing_headers:
             raise ValueError(
-                "Unsupported contacts CSV. Expected a Google Contacts export with a 'Name' column."
+                "Unsupported contacts CSV. Expected the real Google Contacts export format with "
+                f"headers including: {', '.join(_GOOGLE_REQUIRED_HEADERS)}. "
+                f"Missing: {', '.join(missing_headers)}."
             )
 
         contacts: list[ContactRecord] = []
@@ -170,12 +223,15 @@ def _google_csv_row_to_contact_record(
     row_number: int,
 ) -> ContactRecord:
     methods = _extract_google_csv_methods(row)
-    display_name = (
-        row.get("Name")
-        or " ".join(part for part in [row.get("Given Name"), row.get("Family Name")] if part).strip()
-        or f"csv-contact-{row_number}"
+    display_name = _build_google_csv_display_name(
+        row=row,
+        methods=methods,
+        row_number=row_number,
     )
     organization = _extract_google_csv_organization(row)
+    given_name = " ".join(
+        part for part in [row.get("First Name"), row.get("Middle Name")] if part
+    ).strip() or None
     raw_payload = {
         "format": "google_contacts_csv",
         "row_number": row_number,
@@ -192,8 +248,8 @@ def _google_csv_row_to_contact_record(
             row_number=row_number,
         ),
         display_name=display_name,
-        given_name=row.get("Given Name") or None,
-        family_name=row.get("Family Name") or None,
+        given_name=given_name,
+        family_name=row.get("Last Name") or None,
         nickname=row.get("Nickname") or None,
         organization=organization,
         notes=row.get("Notes") or None,
@@ -213,34 +269,65 @@ def _extract_google_csv_methods(row: dict[str, str]) -> list[ContactMethod]:
         grouped_entries.setdefault((kind, int(index_text)), {})[field_name.lower()] = value
 
     methods: list[ContactMethod] = []
-    for kind, _ in sorted(grouped_entries):
-        entry = grouped_entries[(kind, _)]
-        raw_value = entry.get("value", "").strip()
-        if not raw_value:
-            continue
-        normalized_value = normalize_email(raw_value) if kind == "email" else normalize_phone(raw_value)
-        methods.append(
-            ContactMethod(
-                kind=kind,
-                value=raw_value,
-                label=entry.get("type") or None,
-                normalized_value=normalized_value,
-                is_primary=not any(existing.kind == kind for existing in methods),
+    seen_values: set[tuple[str, str]] = set()
+    for group_key in sorted(grouped_entries):
+        kind, _ = group_key
+        entry = grouped_entries[group_key]
+        label = (entry.get("label") or "").strip() or None
+        for raw_value in _split_google_csv_multi_value(entry.get("value", "")):
+            normalized_value = (
+                normalize_email(raw_value) if kind == "email" else normalize_phone(raw_value)
             )
-        )
+            dedupe_key = (kind, normalized_value or raw_value)
+            if dedupe_key in seen_values:
+                continue
+            seen_values.add(dedupe_key)
+            methods.append(
+                ContactMethod(
+                    kind=kind,
+                    value=raw_value,
+                    label=label,
+                    normalized_value=normalized_value,
+                )
+            )
+    primary_by_kind: set[str] = set()
+    for method in methods:
+        if method.kind in primary_by_kind:
+            continue
+        method.is_primary = True
+        primary_by_kind.add(method.kind)
     return methods
 
 
 def _extract_google_csv_organization(row: dict[str, str]) -> str | None:
-    organizations: list[tuple[int, str]] = []
-    for key, value in row.items():
-        match = _GOOGLE_ORGANIZATION_NAME_RE.match(key)
-        if match is None or not value:
-            continue
-        organizations.append((int(match.group(1)), value))
-    if organizations:
-        return sorted(organizations)[0][1]
-    return None
+    return row.get("Organization Name") or None
+
+
+def _build_google_csv_display_name(
+    *,
+    row: dict[str, str],
+    methods: list[ContactMethod],
+    row_number: int,
+) -> str:
+    name = " ".join(
+        part for part in [row.get("First Name"), row.get("Middle Name"), row.get("Last Name")] if part
+    ).strip()
+    if name:
+        return name
+    organization = row.get("Organization Name")
+    if organization:
+        return organization
+    for method in methods:
+        if method.kind == "email":
+            return method.value
+    for method in methods:
+        if method.kind == "phone":
+            return method.value
+    return f"csv-contact-{row_number}"
+
+
+def _split_google_csv_multi_value(value: str) -> list[str]:
+    return [part.strip() for part in value.split(":::") if part.strip()]
 
 
 def _build_google_csv_source_contact_id(
@@ -253,8 +340,9 @@ def _build_google_csv_source_contact_id(
 ) -> str:
     primary_key = {
         "display_name": display_name,
-        "given_name": row.get("Given Name", ""),
-        "family_name": row.get("Family Name", ""),
+        "first_name": row.get("First Name", ""),
+        "middle_name": row.get("Middle Name", ""),
+        "last_name": row.get("Last Name", ""),
         "nickname": row.get("Nickname", ""),
         "organization": organization or "",
         "emails": sorted(

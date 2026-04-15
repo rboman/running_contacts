@@ -34,11 +34,13 @@ from match_my_contacts.config import (
     write_app_paths,
 )
 from match_my_contacts.contacts.storage import ContactsRepository
-from match_my_contacts.contacts.service import import_google_contacts_csv
 from match_my_contacts.contacts.service import (
+    empty_contacts_database,
     ensure_google_credentials_file,
+    import_google_contacts_csv,
     resolve_google_sync_paths,
     sync_google_contacts,
+    vacuum_contacts_database,
 )
 from match_my_contacts.matching.models import MatchReport, MatchResult
 from match_my_contacts.matching.service import (
@@ -64,6 +66,9 @@ SORT_OPTIONS = ("position", "time", "athlete", "contact", "team", "score")
 CONTACT_COLUMNS_SETTINGS_KEY = "contacts/visible_columns"
 SETTINGS_ORGANIZATION = "match-my-contacts"
 SETTINGS_APPLICATION = "match-my-contacts-gui"
+CONTACTS_IMPORT_DIALOG_SETTINGS_KEY = "file_dialogs/contacts_import_csv"
+CONTACTS_EXPORT_DIALOG_SETTINGS_KEY = "file_dialogs/contacts_export_json"
+MATCHING_EXPORT_DIALOG_SETTINGS_KEY = "file_dialogs/matching_export_csv"
 
 
 class MainWindow(QMainWindow):
@@ -112,6 +117,8 @@ class MainWindow(QMainWindow):
         self.contacts_load_button = QPushButton("Load contacts")
         self.contacts_sync_button = QPushButton("Sync Google")
         self.contacts_import_button = QPushButton("Import Google CSV")
+        self.contacts_empty_button = QPushButton("Empty DB...")
+        self.contacts_vacuum_button = QPushButton("VACUUM DB")
         self.contacts_export_button = QPushButton("Export JSON")
         self.contacts_columns_button = QPushButton("Columns...")
         self.list_datasets_button = QPushButton("List datasets")
@@ -160,6 +167,8 @@ class MainWindow(QMainWindow):
         self.contacts_load_button.clicked.connect(self.load_contacts)
         self.contacts_sync_button.clicked.connect(self.sync_google_contacts)
         self.contacts_import_button.clicked.connect(self.import_contacts_csv)
+        self.contacts_empty_button.clicked.connect(self.empty_contacts_database)
+        self.contacts_vacuum_button.clicked.connect(self.vacuum_contacts_database)
         self.contacts_export_button.clicked.connect(self.export_contacts_json)
         self.contacts_columns_button.clicked.connect(self.edit_contact_columns)
         self.list_datasets_button.clicked.connect(self.list_datasets)
@@ -198,6 +207,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.contacts_load_button)
         layout.addWidget(self.contacts_sync_button)
         layout.addWidget(self.contacts_import_button)
+        layout.addWidget(self.contacts_empty_button)
+        layout.addWidget(self.contacts_vacuum_button)
         layout.addWidget(self.contacts_export_button)
         layout.addWidget(self.contacts_columns_button)
         return section
@@ -294,16 +305,16 @@ class MainWindow(QMainWindow):
 
     def import_contacts_csv(self) -> None:
         try:
-            selected_path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Import Google Contacts CSV",
-                str(self.app_paths.data_dir),
-                "CSV Files (*.csv)",
+            selected_path = self._choose_open_file_path(
+                title="Import Google Contacts CSV",
+                default_path=self.app_paths.data_dir,
+                file_filter="CSV Files (*.csv)",
+                settings_key=CONTACTS_IMPORT_DIALOG_SETTINGS_KEY,
             )
             if not selected_path:
                 self.statusBar().showMessage("CSV import cancelled.")
                 return
-            csv_path = Path(selected_path)
+            csv_path = selected_path
             stats = import_google_contacts_csv(
                 csv_path=csv_path,
                 db_path=self.contacts_db_path,
@@ -332,8 +343,21 @@ class MainWindow(QMainWindow):
                 f"{stats.written_count} written, {stats.deactivated_count} deactivated. "
                 f"Showing {contact_count} contacts."
             )
+            QMessageBox.information(
+                self,
+                "Google Sync Completed",
+                (
+                    "Google sync completed successfully.\n\n"
+                    f"Source: google_people/default\n"
+                    f"Fetched: {stats.fetched_count}\n"
+                    f"Written: {stats.written_count}\n"
+                    f"Deactivated: {stats.deactivated_count}\n"
+                    f"Visible contacts: {contact_count}"
+                ),
+            )
         except Exception as exc:
-            self._show_error(exc)
+            self.statusBar().showMessage(f"Error: {exc}")
+            QMessageBox.critical(self, "Google Sync Failed", str(exc))
 
     def export_contacts_json(self) -> None:
         try:
@@ -343,6 +367,7 @@ class MainWindow(QMainWindow):
                 title="Export contacts JSON",
                 default_path=self.state.last_export_path or self.app_paths.contacts_export_json,
                 file_filter="JSON Files (*.json)",
+                settings_key=CONTACTS_EXPORT_DIALOG_SETTINGS_KEY,
             )
             if output_path is None:
                 self.statusBar().showMessage("Export cancelled.")
@@ -352,6 +377,71 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Exported contacts to {export_path}.")
         except Exception as exc:
             self._show_error(exc)
+
+    def empty_contacts_database(self) -> None:
+        warning_message = (
+            f"This will permanently empty {self.contacts_db_path}, delete contacts, methods, aliases, "
+            "and sync history, reset local contact IDs, and delete matching reviews. "
+            "Race datasets and race results will be kept."
+        )
+        choice = QMessageBox.warning(
+            self,
+            "Empty Contacts Database",
+            warning_message,
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if choice != QMessageBox.StandardButton.Ok:
+            self.statusBar().showMessage("Empty DB cancelled.")
+            return
+
+        try:
+            stats = empty_contacts_database(
+                db_path=self.contacts_db_path,
+                results_db_path=self.results_db_path,
+            )
+            self._invalidate_matching_cache()
+            self.table_presenter.show_placeholder("No data loaded yet.")
+            summary = (
+                "Empty DB completed:\n\n"
+                f"Contacts deleted: {stats.contacts_deleted}\n"
+                f"Methods deleted: {stats.methods_deleted}\n"
+                f"Aliases deleted: {stats.aliases_deleted}\n"
+                f"Sync runs deleted: {stats.sync_runs_deleted}\n"
+                f"Matching reviews deleted: {stats.match_reviews_deleted}\n"
+                f"IDs reset: {'yes' if stats.ids_reset else 'no'}"
+            )
+            self.statusBar().showMessage(
+                f"Empty DB completed: {stats.contacts_deleted} contacts, "
+                f"{stats.methods_deleted} methods, {stats.aliases_deleted} aliases, "
+                f"{stats.sync_runs_deleted} sync runs, {stats.match_reviews_deleted} matching reviews deleted."
+            )
+            QMessageBox.information(self, "Empty DB Completed", summary)
+        except Exception as exc:
+            self.statusBar().showMessage(f"Error: {exc}")
+            QMessageBox.critical(self, "Empty DB Failed", str(exc))
+
+    def vacuum_contacts_database(self) -> None:
+        try:
+            stats = vacuum_contacts_database(db_path=self.contacts_db_path)
+            self.statusBar().showMessage(
+                f"VACUUM completed: {stats.before_size_bytes} bytes before, "
+                f"{stats.after_size_bytes} bytes after, {stats.reclaimed_bytes} bytes reclaimed."
+            )
+            QMessageBox.information(
+                self,
+                "VACUUM Completed",
+                (
+                    "SQLite VACUUM completed successfully.\n\n"
+                    f"Database: {self.contacts_db_path}\n"
+                    f"Size before: {stats.before_size_bytes} bytes\n"
+                    f"Size after: {stats.after_size_bytes} bytes\n"
+                    f"Reclaimed: {stats.reclaimed_bytes} bytes"
+                ),
+            )
+        except Exception as exc:
+            self.statusBar().showMessage(f"Error: {exc}")
+            QMessageBox.critical(self, "VACUUM Failed", str(exc))
 
     def edit_contact_columns(self) -> None:
         dialog = ContactsColumnsDialog(
@@ -455,6 +545,7 @@ class MainWindow(QMainWindow):
                 title="Export matches CSV",
                 default_path=self.state.last_export_path or self.app_paths.matches_export_csv,
                 file_filter="CSV Files (*.csv)",
+                settings_key=MATCHING_EXPORT_DIALOG_SETTINGS_KEY,
             )
             if output_path is None:
                 self.statusBar().showMessage("Export cancelled.")
@@ -599,7 +690,7 @@ class MainWindow(QMainWindow):
         self.state.last_match_report = None
 
     def edit_config(self) -> None:
-        dialog = ConfigDialog(app_paths=self.app_paths, parent=self)
+        dialog = ConfigDialog(app_paths=self.app_paths, parent=self, settings=self.settings)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             self.statusBar().showMessage("Config edit cancelled.")
             return
@@ -660,21 +751,65 @@ class MainWindow(QMainWindow):
             return candidates[0]
         return candidates[0]
 
-    def _choose_save_path(self, *, title: str, default_path: Path, file_filter: str) -> Path | None:
-        selected_path, _ = QFileDialog.getSaveFileName(
+    def _choose_open_file_path(
+        self,
+        *,
+        title: str,
+        default_path: Path,
+        file_filter: str,
+        settings_key: str,
+    ) -> Path | None:
+        selected_path, _ = QFileDialog.getOpenFileName(
             self,
             title,
-            str(default_path),
+            self._dialog_start_directory(settings_key, default_path=default_path),
             file_filter,
         )
         if not selected_path:
             return None
-        return Path(selected_path)
+        path = Path(selected_path)
+        self._remember_dialog_path(settings_key, path)
+        return path
+
+    def _choose_save_path(
+        self,
+        *,
+        title: str,
+        default_path: Path,
+        file_filter: str,
+        settings_key: str,
+    ) -> Path | None:
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self,
+            title,
+            self._dialog_start_directory(settings_key, default_path=default_path),
+            file_filter,
+        )
+        if not selected_path:
+            return None
+        path = Path(selected_path)
+        self._remember_dialog_path(settings_key, path)
+        return path
 
     @staticmethod
     def _clean_text(value: str) -> str | None:
         cleaned = value.strip()
         return cleaned or None
+
+    def _dialog_start_directory(self, settings_key: str, *, default_path: Path) -> str:
+        stored_value = self.settings.value(settings_key)
+        if isinstance(stored_value, str) and stored_value.strip():
+            return stored_value
+        resolved = default_path.expanduser()
+        if resolved.suffix:
+            resolved = resolved.parent
+        return str(resolved)
+
+    def _remember_dialog_path(self, settings_key: str, path: Path) -> None:
+        resolved = path.expanduser()
+        directory = resolved.parent if resolved.suffix else resolved
+        self.settings.setValue(settings_key, str(directory))
+        self.settings.sync()
 
     def _show_error(self, exc: Exception) -> None:
         self.statusBar().showMessage(f"Error: {exc}")
@@ -700,6 +835,14 @@ class MainWindow(QMainWindow):
         apply_button_icon(
             self.contacts_import_button,
             standard_pixmap=QStyle.StandardPixmap.SP_DialogOpenButton,
+        )
+        apply_button_icon(
+            self.contacts_empty_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_TrashIcon,
+        )
+        apply_button_icon(
+            self.contacts_vacuum_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_BrowserReload,
         )
         apply_button_icon(
             self.contacts_export_button,
@@ -771,6 +914,12 @@ class MainWindow(QMainWindow):
         )
         self.contacts_import_button.setToolTip(
             "Import a Google Contacts CSV export into the local contacts database."
+        )
+        self.contacts_empty_button.setToolTip(
+            "Delete all local contacts, reset their IDs, and clear matching reviews after confirmation."
+        )
+        self.contacts_vacuum_button.setToolTip(
+            "Run SQLite VACUUM on the local contacts database to compact the file on disk."
         )
         self.contacts_export_button.setToolTip(
             "Export the current local contacts cache to a JSON file."

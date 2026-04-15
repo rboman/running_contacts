@@ -30,6 +30,9 @@ Current GUI capabilities:
 - load contacts from the local database
 - sync Google contacts into the local database
 - import Google Contacts CSV exports into the local database
+- show a modal success/error dialog after Google sync
+- empty the contacts database after a confirmation dialog
+- run SQLite `VACUUM` on the contacts database from the GUI
 - export contacts to JSON
 - choose visible contact columns, including source visibility
 - open a read-only contact details dialog with source metadata and raw JSON
@@ -122,6 +125,8 @@ Sync contacts:
 match-my-contacts contacts sync
 match-my-contacts contacts sync-google
 match-my-contacts contacts import-google-csv --csv-path /path/to/google-contacts.csv
+match-my-contacts contacts empty-db
+match-my-contacts contacts vacuum-db
 match-my-contacts contacts list-sources
 ```
 
@@ -213,6 +218,9 @@ Recent GUI additions to keep in mind:
 
 - local contacts auto-load on startup when `contacts.sqlite3` already exists
 - `Contacts` can now sync Google and import Google Contacts CSV exports directly from the GUI
+- `Sync Google` now shows a modal summary dialog on success and a modal error dialog on failure
+- `Contacts` now exposes `Empty DB...` with an explicit destructive-action confirmation
+- `Contacts` now exposes `VACUUM DB` to compact `contacts.sqlite3` on demand
 - contacts table column visibility is stored in Qt settings, not in `config.toml`
 - the optional source column exposes the origin of each contact in the table
 - double-clicking a contact row opens a read-only details dialog with DB metadata, source metadata, and raw JSON
@@ -220,5 +228,5 @@ Recent GUI additions to keep in mind:
 
 Current CSV assumption:
 
-- only the Google Contacts export format is supported in the GUI
+- only the real Google Contacts export format is supported in the GUI and CLI importer
 - there is still no generic CSV mapping wizard

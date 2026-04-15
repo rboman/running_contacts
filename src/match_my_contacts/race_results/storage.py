@@ -422,6 +422,12 @@ class RaceResultsRepository:
             )
             return bool(cursor.rowcount)
 
+    def clear_all_match_reviews(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM matching_reviews")
+            conn.execute("DELETE FROM sqlite_sequence WHERE name = 'matching_reviews'")
+            return int(cursor.rowcount or 0)
+
     def list_match_reviews(self, *, dataset_id: int) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(

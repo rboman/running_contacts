@@ -34,3 +34,23 @@ class SyncStats:
     written_count: int
     deactivated_count: int
     sync_run_id: int
+
+
+@dataclass(slots=True)
+class EmptyContactsDbStats:
+    contacts_deleted: int
+    methods_deleted: int
+    aliases_deleted: int
+    sync_runs_deleted: int
+    match_reviews_deleted: int
+    ids_reset: bool
+
+
+@dataclass(slots=True)
+class VacuumDbStats:
+    before_size_bytes: int
+    after_size_bytes: int
+
+    @property
+    def reclaimed_bytes(self) -> int:
+        return max(self.before_size_bytes - self.after_size_bytes, 0)

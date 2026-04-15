@@ -101,6 +101,26 @@ def test_match_reviews_can_be_stored_and_cleared(tmp_path: Path) -> None:
     assert repository.clear_match_review(dataset_id=dataset_id, result_id=result_id) is True
 
 
+def test_clear_all_match_reviews_resets_table(tmp_path: Path) -> None:
+    repository = RaceResultsRepository(tmp_path / "race_results.sqlite3")
+    repository.initialize()
+
+    dataset_id = repository.save_dataset(dataset=make_dataset(), results=make_results())
+    result_id = repository.list_results(dataset_id=dataset_id, limit=1)[0]["id"]
+    repository.set_match_review(
+        dataset_id=dataset_id,
+        result_id=result_id,
+        status="accepted",
+        contact_id=12,
+        note="manual",
+    )
+
+    deleted_count = repository.clear_all_match_reviews()
+
+    assert deleted_count == 1
+    assert repository.list_match_reviews(dataset_id=dataset_id) == []
+
+
 def test_dataset_aliases_can_be_added_and_resolved(tmp_path: Path) -> None:
     repository = RaceResultsRepository(tmp_path / "race_results.sqlite3")
     repository.initialize()

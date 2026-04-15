@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -18,10 +19,21 @@ from PySide6.QtWidgets import (
 from match_my_contacts.config import AppPaths
 
 
+CONFIG_DATA_DIR_DIALOG_SETTINGS_KEY = "file_dialogs/config_data_dir"
+CONFIG_CREDENTIALS_DIALOG_SETTINGS_KEY = "file_dialogs/config_credentials_file"
+
+
 class ConfigDialog(QDialog):
-    def __init__(self, *, app_paths: AppPaths, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        app_paths: AppPaths,
+        parent: QWidget | None = None,
+        settings: QSettings | None = None,
+    ) -> None:
         super().__init__(parent)
         self._app_paths = app_paths
+        self._settings = settings or QSettings("match-my-contacts", "match-my-contacts-gui")
 
         self.setWindowTitle("Configuration")
         self.resize(720, 220)
@@ -68,19 +80,38 @@ class ConfigDialog(QDialog):
         return Path(raw_value).expanduser()
 
     def _choose_data_dir(self) -> None:
-        selected_dir = QFileDialog.getExistingDirectory(self, "Select data directory", self.data_dir_input.text())
+        selected_dir = QFileDialog.getExistingDirectory(
+            self,
+            "Select data directory",
+            self._dialog_start_directory(
+                CONFIG_DATA_DIR_DIALOG_SETTINGS_KEY,
+                fallback_path=Path(self.data_dir_input.text() or self._app_paths.data_dir),
+            ),
+        )
         if selected_dir:
             self.data_dir_input.setText(selected_dir)
+            self._remember_dialog_path(CONFIG_DATA_DIR_DIALOG_SETTINGS_KEY, Path(selected_dir))
 
     def _choose_credentials_file(self) -> None:
         selected_file, _ = QFileDialog.getOpenFileName(
             self,
             "Select credentials.json",
-            self.credentials_path_input.text(),
+            self._dialog_start_directory(
+                CONFIG_CREDENTIALS_DIALOG_SETTINGS_KEY,
+                fallback_path=Path(
+                    self.credentials_path_input.text()
+                    or self._app_paths.credentials_path
+                    or self._app_paths.data_dir
+                ),
+            ),
             "JSON Files (*.json)",
         )
         if selected_file:
             self.credentials_path_input.setText(selected_file)
+            self._remember_dialog_path(
+                CONFIG_CREDENTIALS_DIALOG_SETTINGS_KEY,
+                Path(selected_file),
+            )
 
     def _row_with_button(self, line_edit: QLineEdit, callback: object) -> QWidget:
         container = QWidget(self)
@@ -92,3 +123,18 @@ class ConfigDialog(QDialog):
         layout.addWidget(line_edit)
         layout.addWidget(button)
         return container
+
+    def _dialog_start_directory(self, settings_key: str, *, fallback_path: Path) -> str:
+        stored_value = self._settings.value(settings_key)
+        if isinstance(stored_value, str) and stored_value.strip():
+            return stored_value
+        resolved = fallback_path.expanduser()
+        if resolved.suffix:
+            resolved = resolved.parent
+        return str(resolved)
+
+    def _remember_dialog_path(self, settings_key: str, path: Path) -> None:
+        resolved = path.expanduser()
+        directory = resolved.parent if resolved.suffix else resolved
+        self._settings.setValue(settings_key, str(directory))
+        self._settings.sync()

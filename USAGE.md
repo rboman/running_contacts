@@ -58,6 +58,8 @@ match-my-contacts contacts list --query noel
 match-my-contacts contacts list --source google_people
 match-my-contacts contacts list-sources
 match-my-contacts contacts import-google-csv --csv-path /path/to/google-contacts.csv
+match-my-contacts contacts empty-db
+match-my-contacts contacts vacuum-db
 match-my-contacts contacts export-json --output data/exports/contacts.json
 ```
 
@@ -70,6 +72,8 @@ Current source model:
 - sources remain separated in the same SQLite database
 - a Google resync only affects Google API contacts for its account slot
 - a CSV reimport only affects CSV-imported contacts for its account slot
+- `contacts empty-db` clears the contacts DB and matching reviews, but keeps race datasets/results
+- `contacts vacuum-db` runs SQLite `VACUUM` on `contacts.sqlite3` to compact the file on disk
 
 ## GUI locale
 
@@ -104,6 +108,9 @@ The GUI is intentionally simple, but already useful:
 - it keeps the CLI unchanged,
 - it auto-loads local contacts when the SQLite cache already exists,
 - it syncs Google Contacts and imports Google Contacts CSV exports into the same local database,
+- it shows a modal success or error dialog after `Sync Google`,
+- it can empty the local contacts database after an explicit confirmation,
+- it can run SQLite `VACUUM` on the local contacts database,
 - it loads contacts and exports them to JSON,
 - it lets you choose the visible contact columns, including the optional source column,
 - it opens a detailed contact dialog on double-click, including source metadata and raw JSON,
@@ -123,7 +130,9 @@ Then:
 
 - review the auto-loaded contacts table or click `Load contacts` if needed,
 - use `Sync Google` when you want to refresh the API-backed Google contacts,
-- use `Import Google CSV` when you want a local snapshot without the API sync flow,
+- use `Import Google CSV` with a real Google Contacts export when you want a local snapshot without the API sync flow,
+- use `Empty DB...` when you want to wipe the local contacts cache and matching reviews for debugging,
+- use `VACUUM DB` when you want SQLite to compact `contacts.sqlite3` on disk,
 - use `Columns...` to reduce the contacts table to the fields you care about, including source visibility,
 - double-click a contact row to inspect the full stored payload, DB metadata, and source metadata,
 - fetch a race from its ACN URL,
@@ -298,5 +307,5 @@ Recent GUI additions:
 
 Current CSV assumption:
 
-- the GUI import only targets the Google Contacts CSV export format for now
+- the GUI import only targets the real Google Contacts CSV export format for now
 - no generic CSV mapping wizard has been added yet

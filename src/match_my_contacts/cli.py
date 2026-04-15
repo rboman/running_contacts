@@ -4,10 +4,12 @@ import typer
 
 from match_my_contacts.config import AppPaths, default_credentials_path, get_app_paths
 from match_my_contacts.contacts.service import (
+    empty_contacts_database,
     ensure_google_credentials_file,
     import_google_contacts_csv,
     resolve_google_sync_paths,
     sync_google_contacts,
+    vacuum_contacts_database,
 )
 from match_my_contacts.contacts.storage import ContactsRepository
 from match_my_contacts.matching.service import (
@@ -232,11 +234,15 @@ def contacts_import_google_csv(
     ),
 ) -> None:
     """Importe un export CSV Google Contacts dans SQLite."""
-    stats = import_google_contacts_csv(
-        csv_path=csv_path,
-        db_path=db_path or _app_paths().contacts_db,
-        source_account=account,
-    )
+    try:
+        stats = import_google_contacts_csv(
+            csv_path=csv_path,
+            db_path=db_path or _app_paths().contacts_db,
+            source_account=account,
+        )
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=2)
     typer.echo(
         "Import completed: "
         f"{stats.fetched_count} fetched, "
@@ -323,6 +329,72 @@ def contacts_list_sources(
             if source_summary["last_run_completed_at"]:
                 line = f"{line} at {source_summary['last_run_completed_at']}"
         typer.echo(line)
+
+
+@contacts_app.command("empty-db")
+def contacts_empty_db(
+    db_path: Path | None = typer.Option(
+        None,
+        "--db-path",
+        help="Chemin vers la base SQLite locale des contacts.",
+    ),
+    results_db_path: Path | None = typer.Option(
+        None,
+        "--results-db-path",
+        help="Chemin vers la base SQLite des resultats, pour purger aussi les reviews de matching.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Confirmer sans prompt interactif.",
+    ),
+) -> None:
+    """Vide la base contacts locale et purge les reviews de matching associees."""
+    app_paths = _app_paths()
+    resolved_contacts_db = db_path or app_paths.contacts_db
+    resolved_results_db = results_db_path or app_paths.race_results_db
+
+    warning_message = (
+        f"This will permanently empty {resolved_contacts_db}, delete contacts, methods, aliases, "
+        "and sync history, reset local contact IDs, and delete matching reviews from "
+        f"{resolved_results_db}. Race datasets and race results will be kept. Continue?"
+    )
+    if not yes and not typer.confirm(warning_message):
+        typer.echo("Empty DB cancelled.")
+        raise typer.Exit(code=0)
+
+    stats = empty_contacts_database(
+        db_path=resolved_contacts_db,
+        results_db_path=resolved_results_db,
+    )
+    typer.echo(
+        "Empty DB completed: "
+        f"{stats.contacts_deleted} contacts, "
+        f"{stats.methods_deleted} methods, "
+        f"{stats.aliases_deleted} aliases, "
+        f"{stats.sync_runs_deleted} sync runs, "
+        f"{stats.match_reviews_deleted} matching reviews deleted. "
+        f"IDs reset: {'yes' if stats.ids_reset else 'no'}."
+    )
+
+
+@contacts_app.command("vacuum-db")
+def contacts_vacuum_db(
+    db_path: Path | None = typer.Option(
+        None,
+        "--db-path",
+        help="Chemin vers la base SQLite locale des contacts.",
+    ),
+) -> None:
+    """Compacte la base contacts locale avec SQLite VACUUM."""
+    resolved_db_path = db_path or _app_paths().contacts_db
+    stats = vacuum_contacts_database(db_path=resolved_db_path)
+    typer.echo(
+        "VACUUM completed: "
+        f"{stats.before_size_bytes} bytes before, "
+        f"{stats.after_size_bytes} bytes after, "
+        f"{stats.reclaimed_bytes} bytes reclaimed."
+    )
 
 
 @contacts_app.command("export-json")

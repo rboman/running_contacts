@@ -1,0 +1,13 @@
+First Name,Middle Name,Last Name,Nickname,Organization Name,Notes,Labels,E-mail 1 - Label,E-mail 1 - Value,E-mail 2 - Label,E-mail 2 - Value,Phone 1 - Label,Phone 1 - Value,Phone 2 - Label,Phone 2 - Value
+Actarus,,Vega,Goldorunner,Institut Vega,"Pilote de test
+Aime les étoiles.",* Retro,Work,actarus.vega@vega.test,,,Mobile,+32 470 00 00 01,,
+Alcor,,Koji,,Hangar Alpha,Toujours prêt pour un décollage.,* Retro,Home,alcor@hangar-alpha.test,,,Mobile,+32 470 00 00 02 ::: +32 470 00 00 03,Work,+32 470 00 00 02
+Capitaine,,Flam,Curtis,Comet Labs,Capitaine énergique.,* SciFi,Work,cap.flam@comet.test ::: flam@starfleet.test,Home,flam@starfleet.test,Work,+33 6 10 20 30 40,,
+Mala,,Lumière,,Lune Bleue,Expertise photonique.,* Team,* Work,mala.lumiere@bleue.test,,,Home,+32 471 44 55 66,,
+Yumi,,Argent,,Arcadia Forge,Coordonne les archives.,* Team,Other,yumi.argent@arcadia.test,,,Work,+32 472 22 33 44,,
+Cobra,,Stella,Space,Cobra Courier,Préfère les messages courts.,* Cosmic,Home,cobra@space-mail.test,Other,cobra@space-mail.test,Mobile,+32 473 33 44 55,,
+Sheba,,Vega,,Observatoire Aurore,"Analyse les comètes.
+Disponible le mercredi.",* Retro,Work,sheba@aurore.test,,,Mobile,+32 474 55 66 77 ::: +32 474 55 66 77,,
+Ulysse,Neo,Nova,,Odyssea 31,Escales fréquentes.,* Fleet,Home,ulysse.nova@odyssea.test,,,Home,+32 475 11 22 33,Work,+32 2 555 00 31
+Pollux,,Pixel,,Pixel & Co,Collectionne les synthés analogiques.,* Fun,Work,pollux@pixelco.test,,,Mobile,+32 476 10 20 30,,
+,,,,,,* Hidden,Other,hangar18@retro.test,,,Mobile,+32 499 88 77 66,,

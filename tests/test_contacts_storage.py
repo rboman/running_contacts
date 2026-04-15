@@ -5,6 +5,7 @@ from pathlib import Path
 
 from match_my_contacts.contacts.models import ContactMethod, ContactRecord
 from match_my_contacts.contacts.sources import SOURCE_BEHAVIOR_SYNCABLE_API
+from match_my_contacts.contacts.service import vacuum_contacts_database
 from match_my_contacts.contacts.storage import ContactsRepository
 
 
@@ -176,3 +177,56 @@ def test_list_source_summaries_returns_counts_and_last_run(tmp_path: Path) -> No
     assert summaries[0]["active_contacts"] == 1
     assert summaries[0]["inactive_contacts"] == 0
     assert summaries[0]["last_run_status"] == "completed"
+
+
+def test_empty_database_removes_contacts_aliases_methods_and_sync_runs(tmp_path: Path) -> None:
+    repository = ContactsRepository(tmp_path / "contacts.sqlite3")
+    repository.initialize()
+
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[make_contact("people/1", "Alice Example", email="alice@example.com")],
+        sync_run_id=sync_run_id,
+    )
+    contact = repository.list_contacts()[0]
+    repository.add_alias(contact_id=contact["id"], alias_text="Alice Ex")
+
+    stats = repository.empty_database()
+
+    assert stats["contacts_deleted"] == 1
+    assert stats["methods_deleted"] == 1
+    assert stats["aliases_deleted"] == 1
+    assert stats["sync_runs_deleted"] == 1
+    assert stats["ids_reset"] is True
+    assert repository.list_contacts(include_inactive=True) == []
+
+    next_sync_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[make_contact("people/2", "Bob Example", email="bob@example.com")],
+        sync_run_id=next_sync_id,
+    )
+    assert int(repository.list_contacts()[0]["id"]) == 1
+
+
+def test_vacuum_contacts_database_returns_size_stats(tmp_path: Path) -> None:
+    db_path = tmp_path / "contacts.sqlite3"
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[make_contact("people/1", "Alice Example", email="alice@example.com")],
+        sync_run_id=sync_run_id,
+    )
+
+    stats = vacuum_contacts_database(db_path=db_path)
+
+    assert stats.before_size_bytes >= 0
+    assert stats.after_size_bytes >= 0
+    assert stats.reclaimed_bytes >= 0
+    assert db_path.exists() is True

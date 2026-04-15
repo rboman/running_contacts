@@ -150,6 +150,8 @@ Importer un export Google Contacts CSV dans la base locale:
 
 ```bash
 match-my-contacts contacts import-google-csv --csv-path /chemin/vers/google-contacts.csv
+match-my-contacts contacts empty-db
+match-my-contacts contacts vacuum-db
 ```
 
 Récupérer un tableau de résultats ACN Timing:
@@ -219,8 +221,11 @@ La GUI actuelle reste volontairement simple, mais elle est déjà utile au quoti
 - menu `Help` avec `About` et `Credits`,
 - table centrale unique,
 - sync Google depuis l'onglet `Contacts`,
+- dialog de résumé après `Sync Google`,
 - auto-load local des contacts au dÃ©marrage quand la base existe dÃ©jÃ ,
-- import CSV ciblÃ© pour les exports Google Contacts,
+- import CSV ciblÃ© pour le vrai format exporté par Google Contacts,
+- bouton `Empty DB...` avec confirmation explicite,
+- bouton `VACUUM DB` pour compacter `contacts.sqlite3` si besoin,
 - choix des colonnes visibles dans la table contacts,
 - visibilité optionnelle de l'origine des contacts dans la table,
 - fiche contact dÃ©taillÃ©e au double-clic avec les mÃ©tadonnÃ©es de source,
@@ -262,7 +267,10 @@ Mise Ã  jour GUI rÃ©cente:
 
 - auto-load local des contacts au dÃ©marrage si la base existe dÃ©jÃ 
 - bouton `Sync Google` dans l'onglet `Contacts`
-- import CSV ciblÃ© pour les exports Google Contacts
+- dialog de résumé après `Sync Google`
+- bouton `Empty DB...` avec confirmation et purge des reviews de matching
+- bouton `VACUUM DB` pour compacter la base locale
+- import CSV ciblÃ© pour le vrai format exporté par Google Contacts
 - choix persistant des colonnes visibles dans la table contacts
 - colonne optionnelle pour afficher l'origine du contact
 - fiche contact dÃ©taillÃ©e au double-clic avec les mÃ©tadonnÃ©es de source
