@@ -162,7 +162,7 @@ Manual corrections:
 ```bash
 match-my-contacts contacts add-alias --contact-id 691 --alias "Jean Noel"
 match-my-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --contact-id 691
-match-my-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "homonyme"
+match-my-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "same name"
 match-my-contacts matching list-reviews --dataset liege-15k-2026
 ```
 

@@ -22,10 +22,10 @@ from match_my_contacts.race_results.service import fetch_acn_results
 from match_my_contacts.race_results.storage import RaceResultsRepository
 
 app = typer.Typer()
-contacts_app = typer.Typer(help="Synchroniser et interroger les contacts locaux.")
-race_results_app = typer.Typer(help="Recuperer et interroger les resultats de course locaux.")
-matching_app = typer.Typer(help="Croiser les contacts locaux avec des resultats de course locaux.")
-config_app = typer.Typer(help="Inspecter la configuration locale et les chemins resolves.")
+contacts_app = typer.Typer(help="Synchronize and inspect local contacts.")
+race_results_app = typer.Typer(help="Fetch and inspect local race results.")
+matching_app = typer.Typer(help="Match local contacts against local race results.")
+config_app = typer.Typer(help="Inspect local configuration and resolved paths.")
 
 SORT_OPTIONS = ["position", "time", "athlete", "contact", "team", "score"]
 STATUS_OPTIONS = ["accepted", "ambiguous", "all"]
@@ -33,18 +33,18 @@ STATUS_OPTIONS = ["accepted", "ambiguous", "all"]
 
 @app.callback()
 def main() -> None:
-    """CLI principale de match_my_contacts."""
+    """Main CLI for match_my_contacts."""
     return None
 
 @app.command()
 def hello() -> None:
-    """Teste que la CLI fonctionne."""
+    """Check that the CLI works."""
     print("match-my-contacts OK")
 
 
 @config_app.command("show")
 def config_show() -> None:
-    """Affiche la configuration locale et les chemins resolus."""
+    """Show local configuration and resolved paths."""
     app_paths = _app_paths()
     fallback_credentials_path = default_credentials_path()
     typer.echo(f"config_path: {app_paths.config_path}")
@@ -100,22 +100,22 @@ def _run_contacts_sync_google(
         "--credentials",
         file_okay=True,
         dir_okay=False,
-        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise credentials.json a la racine du projet si present.",
+        help="Path to the Google OAuth client secret file. By default, uses credentials.json at the project root if present.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
     token_path: Path | None = typer.Option(
         None,
         "--token-path",
-        help="Chemin local pour stocker le token OAuth.",
+        help="Local path used to store the OAuth token.",
     ),
     account: str = typer.Option(
         "default",
         "--account",
-        help="Nom logique du compte source dans la base locale.",
+        help="Logical source account name in the local database.",
     ),
 ) -> None:
     app_paths = _app_paths()
@@ -151,25 +151,25 @@ def contacts_sync(
         "--credentials",
         file_okay=True,
         dir_okay=False,
-        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise credentials.json a la racine du projet si present.",
+        help="Path to the Google OAuth client secret file. By default, uses credentials.json at the project root if present.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
     token_path: Path | None = typer.Option(
         None,
         "--token-path",
-        help="Chemin local pour stocker le token OAuth.",
+        help="Local path used to store the OAuth token.",
     ),
     account: str = typer.Option(
         "default",
         "--account",
-        help="Nom logique du compte source dans la base locale.",
+        help="Logical source account name in the local database.",
     ),
 ) -> None:
-    """Alias retrocompatible pour la synchronisation Google Contacts."""
+    """Backward-compatible alias for Google Contacts synchronization."""
     _run_contacts_sync_google(
         credentials_path=credentials_path,
         db_path=db_path,
@@ -185,25 +185,25 @@ def contacts_sync_google(
         "--credentials",
         file_okay=True,
         dir_okay=False,
-        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise credentials.json a la racine du projet si present.",
+        help="Path to the Google OAuth client secret file. By default, uses credentials.json at the project root if present.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
     token_path: Path | None = typer.Option(
         None,
         "--token-path",
-        help="Chemin local pour stocker le token OAuth.",
+        help="Local path used to store the OAuth token.",
     ),
     account: str = typer.Option(
         "default",
         "--account",
-        help="Nom logique du compte source dans la base locale.",
+        help="Logical source account name in the local database.",
     ),
 ) -> None:
-    """Synchronise explicitement Google Contacts vers SQLite."""
+    """Explicitly synchronize Google Contacts into SQLite."""
     _run_contacts_sync_google(
         credentials_path=credentials_path,
         db_path=db_path,
@@ -220,20 +220,20 @@ def contacts_import_google_csv(
         file_okay=True,
         dir_okay=False,
         exists=True,
-        help="Chemin vers un export CSV Google Contacts.",
+        help="Path to a Google Contacts CSV export.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
     account: str = typer.Option(
         "default",
         "--account",
-        help="Nom logique du slot d'import pour cette source.",
+        help="Logical import slot name for this source.",
     ),
 ) -> None:
-    """Importe un export CSV Google Contacts dans SQLite."""
+    """Import a Google Contacts CSV export into SQLite."""
     try:
         stats = import_google_contacts_csv(
             csv_path=csv_path,
@@ -257,25 +257,25 @@ def contacts_list(
         None,
         "--query",
         "-q",
-        help="Filtre texte sur le nom, l'email ou le téléphone.",
+        help="Text filter on the name, email address, or phone number.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
     include_inactive: bool = typer.Option(
         False,
         "--include-inactive",
-        help="Inclure les contacts absents de la dernière synchronisation.",
+        help="Include contacts missing from the latest sync.",
     ),
     source: str | None = typer.Option(
         None,
         "--source",
-        help="Filtrer sur une source precise, par exemple google_people ou google_contacts_csv.",
+        help="Filter by a specific source, for example google_people or google_contacts_csv.",
     ),
 ) -> None:
-    """Liste les contacts locaux sans appeler Google."""
+    """List local contacts without calling Google."""
     repository = ContactsRepository(db_path or _app_paths().contacts_db)
     repository.initialize()
     contacts = repository.list_contacts(query=query, include_inactive=include_inactive, source=source)
@@ -301,10 +301,10 @@ def contacts_list_sources(
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
 ) -> None:
-    """Liste les sources contacts connues, leurs volumes et leur dernier run."""
+    """List known contact sources, their volumes, and their latest run."""
     repository = ContactsRepository(db_path or _app_paths().contacts_db)
     repository.initialize()
     sources = repository.list_source_summaries()
@@ -336,20 +336,20 @@ def contacts_empty_db(
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des contacts.",
+        help="Path to the local contacts SQLite database.",
     ),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats, pour purger aussi les reviews de matching.",
+        help="Path to the race results SQLite database, also used to purge matching reviews.",
     ),
     yes: bool = typer.Option(
         False,
         "--yes",
-        help="Confirmer sans prompt interactif.",
+        help="Confirm without an interactive prompt.",
     ),
 ) -> None:
-    """Vide la base contacts locale et purge les reviews de matching associees."""
+    """Empty the local contacts database and purge related matching reviews."""
     app_paths = _app_paths()
     resolved_contacts_db = db_path or app_paths.contacts_db
     resolved_results_db = results_db_path or app_paths.race_results_db
@@ -383,10 +383,10 @@ def contacts_vacuum_db(
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des contacts.",
+        help="Path to the local contacts SQLite database.",
     ),
 ) -> None:
-    """Compacte la base contacts locale avec SQLite VACUUM."""
+    """Compact the local contacts database with SQLite VACUUM."""
     resolved_db_path = db_path or _app_paths().contacts_db
     stats = vacuum_contacts_database(db_path=resolved_db_path)
     typer.echo(
@@ -402,20 +402,20 @@ def contacts_export_json(
     output_path: Path | None = typer.Option(
         None,
         "--output",
-        help="Chemin du fichier JSON d'export.",
+        help="Path to the output JSON file.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
     include_inactive: bool = typer.Option(
         False,
         "--include-inactive",
-        help="Inclure les contacts absents de la dernière synchronisation.",
+        help="Include contacts missing from the latest sync.",
     ),
 ) -> None:
-    """Exporte l'état local des contacts au format JSON."""
+    """Export the local contacts state as JSON."""
     app_paths = _app_paths()
     repository = ContactsRepository(db_path or app_paths.contacts_db)
     repository.initialize()
@@ -428,15 +428,15 @@ def contacts_export_json(
 
 @contacts_app.command("add-alias")
 def contacts_add_alias(
-    contact_id: int = typer.Option(..., "--contact-id", help="Identifiant local du contact."),
-    alias_text: str = typer.Option(..., "--alias", help="Alias a ajouter pour ce contact."),
+    contact_id: int = typer.Option(..., "--contact-id", help="Local contact identifier."),
+    alias_text: str = typer.Option(..., "--alias", help="Alias to add for this contact."),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
 ) -> None:
-    """Ajoute un alias manuel a un contact local."""
+    """Add a manual alias to a local contact."""
     repository = ContactsRepository(db_path or _app_paths().contacts_db)
     repository.initialize()
     repository.add_alias(contact_id=contact_id, alias_text=alias_text)
@@ -445,15 +445,15 @@ def contacts_add_alias(
 
 @contacts_app.command("remove-alias")
 def contacts_remove_alias(
-    contact_id: int = typer.Option(..., "--contact-id", help="Identifiant local du contact."),
-    alias_text: str = typer.Option(..., "--alias", help="Alias a supprimer."),
+    contact_id: int = typer.Option(..., "--contact-id", help="Local contact identifier."),
+    alias_text: str = typer.Option(..., "--alias", help="Alias to remove."),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
 ) -> None:
-    """Supprime un alias manuel d'un contact local."""
+    """Remove a manual alias from a local contact."""
     repository = ContactsRepository(db_path or _app_paths().contacts_db)
     repository.initialize()
     removed = repository.remove_alias(contact_id=contact_id, alias_text=alias_text)
@@ -468,15 +468,15 @@ def contacts_list_aliases(
     contact_id: int | None = typer.Option(
         None,
         "--contact-id",
-        help="Limiter l'affichage a un contact.",
+        help="Limit output to a single contact.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale.",
+        help="Path to the local SQLite database.",
     ),
 ) -> None:
-    """Liste les alias manuels enregistres."""
+    """List stored manual aliases."""
     repository = ContactsRepository(db_path or _app_paths().contacts_db)
     repository.initialize()
     aliases = repository.list_aliases(contact_id=contact_id)
@@ -496,20 +496,20 @@ def race_results_fetch_acn(
     url: str = typer.Option(
         ...,
         "--url",
-        help="URL publique ACN Timing de la course ou du tableau de resultats.",
+        help="Public ACN Timing URL for the race or results table.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
     raw_dir: Path | None = typer.Option(
         None,
         "--raw-dir",
-        help="Dossier de snapshots JSON bruts.",
+        help="Directory for raw JSON snapshots.",
     ),
 ) -> None:
-    """Recupere une course ACN Timing et la stocke localement."""
+    """Fetch an ACN Timing race and store it locally."""
     app_paths = _app_paths()
     stats = fetch_acn_results(
         url=url,
@@ -526,10 +526,10 @@ def race_results_list_datasets(
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
 ) -> None:
-    """Liste les jeux de resultats disponibles localement."""
+    """List race result datasets available locally."""
     repository = RaceResultsRepository(db_path or _app_paths().race_results_db)
     repository.initialize()
     datasets = repository.list_datasets()
@@ -551,15 +551,15 @@ def race_results_list_datasets(
 
 @race_results_app.command("add-alias")
 def race_results_add_alias(
-    dataset_id: int = typer.Option(..., "--dataset-id", help="Identifiant local du dataset."),
-    alias_text: str = typer.Option(..., "--alias", help="Alias a associer a cette course."),
+    dataset_id: int = typer.Option(..., "--dataset-id", help="Local dataset identifier."),
+    alias_text: str = typer.Option(..., "--alias", help="Alias to associate with this race."),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
 ) -> None:
-    """Ajoute un alias manuel a une course locale."""
+    """Add a manual alias to a local race."""
     repository = RaceResultsRepository(db_path or _app_paths().race_results_db)
     repository.initialize()
     repository.add_dataset_alias(dataset_id=dataset_id, alias_text=alias_text)
@@ -568,14 +568,14 @@ def race_results_add_alias(
 
 @race_results_app.command("remove-alias")
 def race_results_remove_alias(
-    alias_text: str = typer.Option(..., "--alias", help="Alias a supprimer."),
+    alias_text: str = typer.Option(..., "--alias", help="Alias to remove."),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
 ) -> None:
-    """Supprime un alias manuel de course."""
+    """Remove a manual race alias."""
     repository = RaceResultsRepository(db_path or _app_paths().race_results_db)
     repository.initialize()
     removed = repository.remove_dataset_alias(alias_text=alias_text)
@@ -590,15 +590,15 @@ def race_results_list_aliases(
     dataset_id: int | None = typer.Option(
         None,
         "--dataset-id",
-        help="Limiter l'affichage a une course.",
+        help="Limit output to a single race.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
 ) -> None:
-    """Liste les alias de courses enregistres."""
+    """List stored race aliases."""
     repository = RaceResultsRepository(db_path or _app_paths().race_results_db)
     repository.initialize()
     aliases = repository.list_dataset_aliases(dataset_id=dataset_id)
@@ -616,32 +616,32 @@ def race_results_list_results(
     dataset: str | None = typer.Option(
         None,
         "--dataset",
-        help="Identifiant ou alias local du dataset a afficher.",
+        help="Local dataset identifier or alias to display.",
     ),
     dataset_id: int | None = typer.Option(
         None,
         "--dataset-id",
-        help="Compat: identifiant local du dataset a afficher.",
+        help="Compat: local dataset identifier to display.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
     query: str | None = typer.Option(
         None,
         "--query",
         "-q",
-        help="Filtre texte sur le nom, l'equipe ou le dossard.",
+        help="Text filter on the name, team, or bib.",
     ),
     limit: int = typer.Option(
         20,
         "--limit",
         min=1,
-        help="Nombre maximal de lignes a afficher.",
+        help="Maximum number of rows to display.",
     ),
 ) -> None:
-    """Liste des resultats deja stockes localement."""
+    """List race results already stored locally."""
     repository = RaceResultsRepository(db_path or _app_paths().race_results_db)
     repository.initialize()
     resolved_dataset_id = _resolve_dataset_id(repository=repository, dataset=dataset, dataset_id=dataset_id)
@@ -671,25 +671,25 @@ def race_results_export_json(
     dataset: str | None = typer.Option(
         None,
         "--dataset",
-        help="Identifiant ou alias local du dataset a exporter.",
+        help="Local dataset identifier or alias to export.",
     ),
     dataset_id: int | None = typer.Option(
         None,
         "--dataset-id",
-        help="Compat: identifiant local du dataset a exporter.",
+        help="Compat: local dataset identifier to export.",
     ),
     output_path: Path | None = typer.Option(
         None,
         "--output",
-        help="Chemin du fichier JSON d'export.",
+        help="Path to the output JSON file.",
     ),
     db_path: Path | None = typer.Option(
         None,
         "--db-path",
-        help="Chemin vers la base SQLite locale des resultats.",
+        help="Path to the local race results SQLite database.",
     ),
 ) -> None:
-    """Exporte un dataset de resultats au format JSON."""
+    """Export a race results dataset as JSON."""
     app_paths = _app_paths()
     repository = RaceResultsRepository(db_path or app_paths.race_results_db)
     repository.initialize()
@@ -709,50 +709,50 @@ def matching_run(
     dataset: str | None = typer.Option(
         None,
         "--dataset",
-        help="Identifiant ou alias local du dataset de resultats.",
+        help="Local race results dataset identifier or alias.",
     ),
     dataset_id: int | None = typer.Option(
         None,
         "--dataset-id",
-        help="Compat: identifiant local du dataset de resultats a comparer.",
+        help="Compat: local race results dataset identifier to compare.",
     ),
     contacts_db_path: Path | None = typer.Option(
         None,
         "--contacts-db-path",
-        help="Chemin vers la base SQLite des contacts.",
+        help="Path to the contacts SQLite database.",
     ),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
     min_score: float = typer.Option(
         95.0,
         "--min-score",
         min=0.0,
         max=100.0,
-        help="Score fuzzy minimal pour accepter un match.",
+        help="Minimum fuzzy score required to accept a match.",
     ),
     min_gap: float = typer.Option(
         3.0,
         "--min-gap",
         min=0.0,
         max=100.0,
-        help="Ecart minimal entre le meilleur et le deuxieme candidat.",
+        help="Minimum gap between the best and second-best candidate.",
     ),
     include_ambiguous: bool = typer.Option(
         False,
         "--include-ambiguous",
-        help="Afficher aussi les candidats ambigus non acceptes automatiquement.",
+        help="Also display ambiguous candidates that were not automatically accepted.",
     ),
     limit: int | None = typer.Option(
         None,
         "--limit",
         min=1,
-        help="Limiter le nombre de lignes affichees.",
+        help="Limit the number of displayed rows.",
     ),
 ) -> None:
-    """Croise un dataset de course avec les contacts locaux."""
+    """Match a race dataset against local contacts."""
     app_paths = _app_paths()
     resolved_contacts_db_path = contacts_db_path or app_paths.contacts_db
     resolved_results_db_path = results_db_path or app_paths.race_results_db
@@ -816,22 +816,22 @@ def matching_list(
     dataset: str | None = typer.Option(
         None,
         "--dataset",
-        help="Identifiant ou alias local du dataset de resultats.",
+        help="Local race results dataset identifier or alias.",
     ),
     dataset_id: int | None = typer.Option(
         None,
         "--dataset-id",
-        help="Compat: identifiant local du dataset de resultats.",
+        help="Compat: local race results dataset identifier.",
     ),
     contacts_db_path: Path | None = typer.Option(
         None,
         "--contacts-db-path",
-        help="Chemin vers la base SQLite des contacts.",
+        help="Path to the contacts SQLite database.",
     ),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
     status: str = typer.Option(
         "accepted",
@@ -843,16 +843,16 @@ def matching_list(
         "--sort",
         help="position, time, athlete, contact, team, score",
     ),
-    desc: bool = typer.Option(False, "--desc", help="Tri descendant."),
-    team: str | None = typer.Option(None, "--team", help="Filtre sur l'equipe."),
-    name_query: str | None = typer.Option(None, "--name-query", help="Filtre sur nom resultat/contact."),
-    category: str | None = typer.Option(None, "--category", help="Filtre sur la categorie."),
-    reviewed_only: bool = typer.Option(False, "--reviewed-only", help="Limiter aux matches revus manuellement."),
-    limit: int | None = typer.Option(None, "--limit", min=1, help="Limiter le nombre de lignes affichees."),
-    min_score: float = typer.Option(95.0, "--min-score", min=0.0, max=100.0, help="Score fuzzy minimal."),
-    min_gap: float = typer.Option(3.0, "--min-gap", min=0.0, max=100.0, help="Ecart minimal entre candidats."),
+    desc: bool = typer.Option(False, "--desc", help="Sort descending."),
+    team: str | None = typer.Option(None, "--team", help="Filter by team."),
+    name_query: str | None = typer.Option(None, "--name-query", help="Filter by result/contact name."),
+    category: str | None = typer.Option(None, "--category", help="Filter by category."),
+    reviewed_only: bool = typer.Option(False, "--reviewed-only", help="Limit to manually reviewed matches."),
+    limit: int | None = typer.Option(None, "--limit", min=1, help="Limit the number of displayed rows."),
+    min_score: float = typer.Option(95.0, "--min-score", min=0.0, max=100.0, help="Minimum fuzzy score."),
+    min_gap: float = typer.Option(3.0, "--min-gap", min=0.0, max=100.0, help="Minimum gap between candidates."),
 ) -> None:
-    """Liste les matches avec tri et filtres."""
+    """List matches with sorting and filters."""
     app_paths = _app_paths()
     resolved_contacts_db_path = contacts_db_path or app_paths.contacts_db
     resolved_results_db_path = results_db_path or app_paths.race_results_db
@@ -907,41 +907,41 @@ def matching_export_csv(
     dataset: str | None = typer.Option(
         None,
         "--dataset",
-        help="Identifiant ou alias local du dataset de resultats.",
+        help="Local race results dataset identifier or alias.",
     ),
     dataset_id: int | None = typer.Option(
         None,
         "--dataset-id",
-        help="Compat: identifiant local du dataset de resultats a comparer.",
+        help="Compat: local race results dataset identifier to compare.",
     ),
     output_path: Path | None = typer.Option(
         None,
         "--output",
-        help="Chemin du fichier CSV a produire.",
+        help="Path to the output CSV file.",
     ),
     contacts_db_path: Path | None = typer.Option(
         None,
         "--contacts-db-path",
-        help="Chemin vers la base SQLite des contacts.",
+        help="Path to the contacts SQLite database.",
     ),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
     min_score: float = typer.Option(
         95.0,
         "--min-score",
         min=0.0,
         max=100.0,
-        help="Score fuzzy minimal pour accepter un match.",
+        help="Minimum fuzzy score required to accept a match.",
     ),
     min_gap: float = typer.Option(
         3.0,
         "--min-gap",
         min=0.0,
         max=100.0,
-        help="Ecart minimal entre le meilleur et le deuxieme candidat.",
+        help="Minimum gap between the best and second-best candidate.",
     ),
     status: str = typer.Option(
         "accepted",
@@ -953,13 +953,13 @@ def matching_export_csv(
         "--sort",
         help="position, time, athlete, contact, team, score",
     ),
-    desc: bool = typer.Option(False, "--desc", help="Tri descendant."),
-    team: str | None = typer.Option(None, "--team", help="Filtre sur l'equipe."),
-    name_query: str | None = typer.Option(None, "--name-query", help="Filtre sur nom resultat/contact."),
-    category: str | None = typer.Option(None, "--category", help="Filtre sur la categorie."),
-    reviewed_only: bool = typer.Option(False, "--reviewed-only", help="Limiter aux matches revus manuellement."),
+    desc: bool = typer.Option(False, "--desc", help="Sort descending."),
+    team: str | None = typer.Option(None, "--team", help="Filter by team."),
+    name_query: str | None = typer.Option(None, "--name-query", help="Filter by result/contact name."),
+    category: str | None = typer.Option(None, "--category", help="Filter by category."),
+    reviewed_only: bool = typer.Option(False, "--reviewed-only", help="Limit to manually reviewed matches."),
 ) -> None:
-    """Exporte les matches acceptes au format CSV."""
+    """Export accepted matches as CSV."""
     app_paths = _app_paths()
     resolved_contacts_db_path = contacts_db_path or app_paths.contacts_db
     resolved_results_db_path = results_db_path or app_paths.race_results_db
@@ -995,23 +995,23 @@ def matching_export_csv(
 
 @matching_app.command("accept")
 def matching_accept(
-    dataset: str | None = typer.Option(None, "--dataset", help="Identifiant ou alias local du dataset."),
-    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: identifiant local du dataset."),
-    result_id: int = typer.Option(..., "--result-id", help="Identifiant local du resultat."),
-    contact_id: int = typer.Option(..., "--contact-id", help="Identifiant local du contact."),
-    note: str | None = typer.Option(None, "--note", help="Note libre de revue."),
+    dataset: str | None = typer.Option(None, "--dataset", help="Local dataset identifier or alias."),
+    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: local dataset identifier."),
+    result_id: int = typer.Option(..., "--result-id", help="Local result identifier."),
+    contact_id: int = typer.Option(..., "--contact-id", help="Local contact identifier."),
+    note: str | None = typer.Option(None, "--note", help="Free-form review note."),
     contacts_db_path: Path | None = typer.Option(
         None,
         "--contacts-db-path",
-        help="Chemin vers la base SQLite des contacts.",
+        help="Path to the contacts SQLite database.",
     ),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
 ) -> None:
-    """Force un match manuel entre un resultat et un contact."""
+    """Force a manual match between a result and a contact."""
     app_paths = _app_paths()
     resolved_contacts_db_path = contacts_db_path or app_paths.contacts_db
     resolved_results_db_path = results_db_path or app_paths.race_results_db
@@ -1036,17 +1036,17 @@ def matching_accept(
 
 @matching_app.command("reject")
 def matching_reject(
-    dataset: str | None = typer.Option(None, "--dataset", help="Identifiant ou alias local du dataset."),
-    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: identifiant local du dataset."),
-    result_id: int = typer.Option(..., "--result-id", help="Identifiant local du resultat."),
-    note: str | None = typer.Option(None, "--note", help="Note libre de revue."),
+    dataset: str | None = typer.Option(None, "--dataset", help="Local dataset identifier or alias."),
+    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: local dataset identifier."),
+    result_id: int = typer.Option(..., "--result-id", help="Local result identifier."),
+    note: str | None = typer.Option(None, "--note", help="Free-form review note."),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
 ) -> None:
-    """Marque un resultat comme non-match manuel."""
+    """Mark a result as a manual non-match."""
     results_repository = RaceResultsRepository(results_db_path or _app_paths().race_results_db)
     results_repository.initialize()
     resolved_dataset_id = _resolve_dataset_id(repository=results_repository, dataset=dataset, dataset_id=dataset_id)
@@ -1062,16 +1062,16 @@ def matching_reject(
 
 @matching_app.command("clear-review")
 def matching_clear_review(
-    dataset: str | None = typer.Option(None, "--dataset", help="Identifiant ou alias local du dataset."),
-    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: identifiant local du dataset."),
-    result_id: int = typer.Option(..., "--result-id", help="Identifiant local du resultat."),
+    dataset: str | None = typer.Option(None, "--dataset", help="Local dataset identifier or alias."),
+    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: local dataset identifier."),
+    result_id: int = typer.Option(..., "--result-id", help="Local result identifier."),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
 ) -> None:
-    """Supprime une revue manuelle sur un resultat."""
+    """Remove a manual review from a result."""
     results_repository = RaceResultsRepository(results_db_path or _app_paths().race_results_db)
     results_repository.initialize()
     resolved_dataset_id = _resolve_dataset_id(repository=results_repository, dataset=dataset, dataset_id=dataset_id)
@@ -1084,15 +1084,15 @@ def matching_clear_review(
 
 @matching_app.command("list-reviews")
 def matching_list_reviews(
-    dataset: str | None = typer.Option(None, "--dataset", help="Identifiant ou alias local du dataset."),
-    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: identifiant local du dataset."),
+    dataset: str | None = typer.Option(None, "--dataset", help="Local dataset identifier or alias."),
+    dataset_id: int | None = typer.Option(None, "--dataset-id", help="Compat: local dataset identifier."),
     results_db_path: Path | None = typer.Option(
         None,
         "--results-db-path",
-        help="Chemin vers la base SQLite des resultats.",
+        help="Path to the race results SQLite database.",
     ),
 ) -> None:
-    """Liste les revues manuelles enregistrees."""
+    """List stored manual reviews."""
     results_repository = RaceResultsRepository(results_db_path or _app_paths().race_results_db)
     results_repository.initialize()
     resolved_dataset_id = _resolve_dataset_id(repository=results_repository, dataset=dataset, dataset_id=dataset_id)

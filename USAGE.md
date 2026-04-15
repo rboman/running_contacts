@@ -75,7 +75,7 @@ Current source model:
 - `contacts empty-db` clears the contacts DB and matching reviews, but keeps race datasets/results
 - `contacts vacuum-db` runs SQLite `VACUUM` on `contacts.sqlite3` to compact the file on disk
 
-## GUI locale
+## Local GUI
 
 Install the optional desktop GUI dependencies:
 
@@ -226,7 +226,7 @@ Use this when a single result needs a manual decision:
 
 ```bash
 match-my-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --contact-id 691
-match-my-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "homonyme"
+match-my-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "same name"
 match-my-contacts matching list-reviews --dataset liege-15k-2026
 match-my-contacts matching clear-review --dataset liege-15k-2026 --result-id 1234
 ```

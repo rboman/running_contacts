@@ -1,4 +1,4 @@
-# Environnement virtuel
+# Virtual environment
 .venv/
 
 # Python
@@ -17,11 +17,11 @@ pytest-cache-files-*/
 .coverage
 htmlcov/
 
-# IDE / éditeurs
+# IDE / editors
 .vscode/
 .idea/
 
-# Données locales
+# Local data
 data/*.db
 data/*.sqlite
 data/*.sqlite3
@@ -29,7 +29,7 @@ data/raw/
 data/google/
 data/exports/
 
-# Secrets / config locale
+# Secrets / local config
 .env
 credentials.json
 token.json

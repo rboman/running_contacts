@@ -1,63 +1,63 @@
 # match-my-contacts
 
-Outil local-first pour centraliser des contacts, importer des résultats de course, puis croiser les deux sans dépendre à chaque fois des sources externes.
+Local-first tool for centralizing contacts, importing race results, and matching the two without depending on external services every time.
 
-## Problème visé
+## Problem Statement
 
-Après une course avec plusieurs milliers de participants, l’objectif est de répondre rapidement à la question: quels contacts ont participé, et quel est leur résultat ? Le projet est pensé dès le départ comme trois briques indépendantes et réutilisables:
+After a race with several thousand participants, the goal is to answer one question quickly: which contacts took part, and what was their result? The project is designed from the start as three independent, reusable building blocks:
 
-1. `contacts`: importer et stocker les contacts localement.
-2. `race_results`: récupérer et normaliser les résultats d’une course.
-3. `matching`: croiser les données déjà stockées et produire un tableau exploitable.
+1. `contacts`: import and store contacts locally.
+2. `race_results`: fetch and normalize race results.
+3. `matching`: match already-stored data and produce an actionable table.
 
-Une extension envisagée ensuite est l’analyse de documents longs, par exemple des PDF de réunions, pour retrouver les passages qui mentionnent certains contacts.
+A possible future extension is long-document analysis, for example meeting PDFs, to find passages that mention specific contacts.
 
-## Choix d’architecture
+## Architecture Choices
 
-- Source de vérité locale: SQLite.
-- Exports secondaires: JSON/CSV selon les besoins.
-- Code organisé par domaines réutilisables, pas comme un seul script.
-- Projet local, sans backend distant.
-- Pas d’ORM en première intention: `sqlite3` suffit.
+- Local source of truth: SQLite.
+- Secondary exports: JSON/CSV when useful.
+- Code organized by reusable domains, not as a single script.
+- Local project, no remote backend.
+- No ORM by default: `sqlite3` is enough.
 
-## État actuel
+## Current State
 
-La première brique `contacts` gère maintenant plusieurs sources locales de contacts:
+The first `contacts` building block now supports multiple local contact sources:
 
-- OAuth Desktop via Google People API (`google_people`).
-- Import snapshot d'exports Google Contacts CSV (`google_contacts_csv`).
-- Coexistence de plusieurs sources dans la même base SQLite sans fusion automatique.
-- Resync et réimport isolés par `source` et `source_account`.
-- Consultation locale sans appel réseau.
-- Export JSON de l’état local.
+- Desktop OAuth via Google People API (`google_people`)
+- Snapshot import of Google Contacts CSV exports (`google_contacts_csv`)
+- Multiple sources can coexist in the same SQLite database without automatic merging
+- Resync and reimport are isolated by `source` and `source_account`
+- Local inspection without network calls
+- JSON export of the local state
 
-Le stockage local repose sur trois tables:
+Local storage currently relies on three tables:
 
 - `contacts`
 - `contact_methods`
 - `sync_runs`
 
-La deuxième brique `race_results` est maintenant en place pour ACN Timing:
+The second `race_results` building block is now implemented for ACN Timing:
 
-- parsing d’URL publique ACN Timing,
-- récupération des métadonnées d’événement via Chronorace,
-- récupération du tableau de résultats via l’API Chronorace utilisée par ACN,
-- snapshot JSON brut sous `raw/acn_timing/` dans le `data_dir` configuré,
-- stockage SQLite local dans `race_results.sqlite3` dans le `data_dir` configuré,
-- alias manuels de datasets pour éviter d’utiliser seulement `dataset_id`.
+- parsing a public ACN Timing URL
+- fetching event metadata through Chronorace
+- fetching the results table through the Chronorace API used by ACN
+- raw JSON snapshots under `raw/acn_timing/` in the configured `data_dir`
+- local SQLite storage in `race_results.sqlite3` inside the configured `data_dir`
+- manual dataset aliases so you do not have to rely only on `dataset_id`
 
-La troisième brique `matching` est maintenant disponible:
+The third `matching` building block is now available:
 
-- matching 100% local entre `contacts` et `race_results`,
-- normalisation des noms (accents, casse, ponctuation),
-- match exact puis fuzzy avec `rapidfuzz`,
-- garde-fou d’ambiguïté via un score minimal et un écart minimal entre candidats,
-- affichage terminal et export CSV,
-- tri et filtrage sur les matches (`time`, `team`, `athlete`, etc.),
-- alias manuels réutilisables sur les contacts,
-- reviews manuelles pour accepter ou rejeter un match résultat par résultat.
+- 100% local matching between `contacts` and `race_results`
+- name normalization for accents, casing, and punctuation
+- exact matching first, then fuzzy matching with `rapidfuzz`
+- ambiguity guardrails via a minimum score and a minimum gap between candidates
+- terminal display and CSV export
+- sorting and filtering on matches (`time`, `team`, `athlete`, etc.)
+- reusable manual aliases on contacts
+- manual reviews to accept or reject a match result by result
 
-Le matching actuel est jugé suffisamment satisfaisant pour l'usage courant. La priorité produit est maintenant de faire monter la GUI locale en capacité, en particulier autour des workflows de revue manuelle.
+The current matching quality is considered good enough for day-to-day use. The product priority is now to keep improving the local GUI, especially around manual review workflows.
 
 ## Installation
 
@@ -67,34 +67,34 @@ source .venv/bin/activate
 pip install -e .[gui]
 ```
 
-Python `3.10+` est supporté.
+Python `3.10+` is supported.
 
-## Répertoire de données configurable
+## Configurable Data Directory
 
-Le projet utilise maintenant un fichier de config local par machine pour choisir où stocker l'état local.
+The project now uses a machine-local config file to choose where local state is stored.
 
-Fichier de config:
+Config file:
 
 ```bash
 ~/.config/match_my_contacts/config.toml
 ```
 
-Sous Windows, l'emplacement équivalent est:
+On Windows, the equivalent location is:
 
 ```powershell
 $env:APPDATA\match_my_contacts\config.toml
 ```
 
-La première exécution de la CLI ou de la GUI crée automatiquement ce fichier s'il n'existe pas encore, en pointant vers `data/` à la racine du projet.
+The first CLI or GUI run creates this file automatically if it does not exist yet, pointing to `data/` at the project root.
 
 Format:
 
 ```toml
-data_dir = "/chemin/absolu/vers/match_my_contacts_data"
-credentials_path = "/chemin/absolu/vers/credentials.json"
+data_dir = "/absolute/path/to/match_my_contacts_data"
+credentials_path = "/absolute/path/to/credentials.json"
 ```
 
-Tout l'état local dérive ensuite de ce répertoire:
+All local state then derives from that directory:
 
 - `contacts.sqlite3`
 - `race_results.sqlite3`
@@ -102,67 +102,67 @@ Tout l'état local dérive ensuite de ce répertoire:
 - `raw/acn_timing/`
 - `exports/`
 
-Cela permet de pointer vers un dossier Dropbox partagé entre machines, à condition de n'utiliser qu'une seule machine à la fois sur ces bases SQLite.
+This makes it possible to point several machines to a shared Dropbox-backed folder, as long as only one machine uses those SQLite databases at a time.
 
-Pour inspecter la config et les chemins résolus:
+To inspect the active config and resolved paths:
 
 ```bash
 match-my-contacts config show
 ```
 
-Pour installer aussi la GUI desktop PySide6:
+To install the PySide6 desktop GUI as well:
 
 ```bash
 pip install -e .[gui]
 ```
 
-Sous Linux avec une session X11, Qt peut aussi nécessiter la librairie système `libxcb-cursor0`:
+On Linux with an X11 session, Qt may also require the system library `libxcb-cursor0`:
 
 ```bash
 sudo apt install libxcb-cursor0
 ```
 
-## Préparer l’accès Google Contacts
+## Prepare Google Contacts Access
 
-1. Créer un projet Google Cloud.
-2. Activer Google People API.
-3. Créer des identifiants OAuth pour une application Desktop.
-4. Télécharger le fichier `credentials.json`.
+1. Create a Google Cloud project.
+2. Enable Google People API.
+3. Create OAuth credentials for a Desktop application.
+4. Download the `credentials.json` file.
 
-Le fichier d’identifiants peut rester hors du dépôt. Le token OAuth généré par la CLI est stocké localement sous `google/token.json` dans le `data_dir` configuré.
-Si `credentials.json` est présent à la racine du projet, la commande de sync l’utilise automatiquement, même si la CLI est lancée depuis un autre répertoire.
+The credentials file can stay outside the repository. The OAuth token generated by the CLI is stored locally under `google/token.json` in the configured `data_dir`.
+If `credentials.json` is present at the project root, the sync command uses it automatically even if the CLI is launched from another directory.
 
-## Commandes utiles
+## Useful Commands
 
-Tester la CLI:
+Test the CLI:
 
 ```bash
 match-my-contacts hello
 ```
 
-Synchroniser les contacts Google vers SQLite:
+Synchronize Google contacts into SQLite:
 
 ```bash
 match-my-contacts contacts sync
 match-my-contacts contacts sync-google
-match-my-contacts contacts sync --credentials /chemin/vers/credentials.json
+match-my-contacts contacts sync --credentials /path/to/credentials.json
 ```
 
-Importer un export Google Contacts CSV dans la base locale:
+Import a Google Contacts CSV export into the local database:
 
 ```bash
-match-my-contacts contacts import-google-csv --csv-path /chemin/vers/google-contacts.csv
+match-my-contacts contacts import-google-csv --csv-path /path/to/google-contacts.csv
 match-my-contacts contacts empty-db
 match-my-contacts contacts vacuum-db
 ```
 
-Récupérer un tableau de résultats ACN Timing:
+Fetch an ACN Timing results table:
 
 ```bash
 match-my-contacts race-results fetch-acn --url 'https://www.acn-timing.com/?lng=FR#/events/2157220339092161/ctx/20260412_liege/generic/197994_1/home/LIVE1'
 ```
 
-Lister les datasets de résultats locaux:
+List local race datasets:
 
 ```bash
 match-my-contacts race-results list-datasets
@@ -170,7 +170,7 @@ match-my-contacts race-results add-alias --dataset-id 1 --alias liege-15k-2026
 match-my-contacts race-results list-results --dataset liege-15k-2026 --query dupont
 ```
 
-Lancer le matching local:
+Run local matching:
 
 ```bash
 match-my-contacts matching run --dataset liege-15k-2026
@@ -178,18 +178,18 @@ match-my-contacts matching list --dataset liege-15k-2026 --team TEAMULIEGE --sor
 match-my-contacts matching export-csv --dataset liege-15k-2026 --output data/exports/matches.csv
 ```
 
-Corriger les cas limites:
+Correct edge cases:
 
 ```bash
 match-my-contacts contacts list --query noel
 match-my-contacts contacts add-alias --contact-id 42 --alias "Jean Noel"
 match-my-contacts matching run --dataset liege-15k-2026 --include-ambiguous --limit 20
 match-my-contacts matching accept --dataset liege-15k-2026 --result-id 1234 --contact-id 42
-match-my-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "homonyme"
+match-my-contacts matching reject --dataset liege-15k-2026 --result-id 5678 --note "same name"
 match-my-contacts matching list-reviews --dataset liege-15k-2026
 ```
 
-Lister les contacts locaux:
+List local contacts:
 
 ```bash
 match-my-contacts contacts list
@@ -198,85 +198,85 @@ match-my-contacts contacts list --source google_people
 match-my-contacts contacts list-sources
 ```
 
-Exporter l’état local en JSON:
+Export local state as JSON:
 
 ```bash
 match-my-contacts contacts export-json --output data/exports/contacts.json
 ```
 
-Lancer les tests:
+Run tests:
 
 ```bash
 pytest -q
 ```
 
-Lancer la GUI locale:
+Launch the local GUI:
 
 ```bash
 match-my-contacts-gui
 ```
 
-La GUI actuelle reste volontairement simple, mais elle est déjà utile au quotidien:
+The current GUI is intentionally simple, but already useful for daily work:
 
-- interface desktop locale en PySide6,
-- onglets `Contacts`, `Race Results`, `Matching` et `Config`,
-- menu `Help` avec `About` et `Credits`,
-- table centrale unique,
-- sync Google depuis l'onglet `Contacts`,
-- dialog de résumé après `Sync Google`,
-- auto-load local des contacts au démarrage quand la base existe déjà,
-- import CSV ciblé pour le vrai format exporté par Google Contacts,
-- bouton `Empty DB...` avec confirmation explicite,
-- bouton `VACUUM DB` pour compacter `contacts.sqlite3` si besoin,
-- choix des colonnes visibles dans la table contacts,
-- visibilité optionnelle de l'origine des contacts dans la table,
-- fiche contact détaillée au double-clic avec les métadonnées de source,
-- import ACN depuis l'interface,
-- ajout d'alias de dataset,
-- export JSON des contacts,
-- filtrage local du matching et export CSV,
-- visualisation et édition de la configuration locale,
-- aucun auto-sync réseau au démarrage,
-- reviews manuelles encore laissées à la CLI.
+- local desktop UI in PySide6
+- `Contacts`, `Race Results`, `Matching`, and `Config` tabs
+- `Help` menu with `About` and `Credits`
+- single central table
+- Google sync from the `Contacts` tab
+- summary dialog after `Sync Google`
+- local contacts auto-load on startup when the database already exists
+- CSV import targeted at the real Google Contacts export format
+- `Empty DB...` button with explicit confirmation
+- `VACUUM DB` button to compact `contacts.sqlite3` when needed
+- visible-column selection for the contacts table
+- optional source visibility in the contacts table
+- detailed contact dialog on double-click with source metadata
+- ACN import from the GUI
+- dataset alias creation
+- contacts JSON export
+- local matching filters and CSV export
+- local config inspection and editing
+- no network auto-sync on startup
+- manual reviews still remain CLI-only for now
 
-## Migration vers Dropbox
+## Dropbox Migration
 
-1. lancer une fois la CLI ou la GUI pour créer le fichier de config local
-2. éditer `config.toml` pour pointer `data_dir` vers un dossier Dropbox partagé
-3. copier le contenu actuel de `data/` vers ce dossier partagé
-4. relancer `match-my-contacts` ou `match-my-contacts-gui`
-5. vérifier que contacts, datasets, alias et exports sont bien retrouvés
+1. run the CLI or GUI once to create the local config file
+2. edit `config.toml` so `data_dir` points to a shared Dropbox folder
+3. copy the current contents of `data/` into that shared folder
+4. restart `match-my-contacts` or `match-my-contacts-gui`
+5. verify that contacts, datasets, aliases, and exports are all present
 
-Précautions:
+Precautions:
 
-- ne pas ouvrir la même base SQLite en même temps sur deux machines
-- laisser Dropbox finir la synchronisation avant de changer de machine
-- en cas de conflit Dropbox, inspecter d'abord les fichiers `.sqlite3` et les copies conflictuelles avant de continuer
+- do not open the same SQLite database on two machines at the same time
+- let Dropbox finish syncing before switching machines
+- if Dropbox creates conflict copies, inspect the `.sqlite3` files and conflicted copies before continuing
 
-Guide pratique d'utilisation:
+Practical usage guide:
 
-- lire `USAGE.md`
+- read `USAGE.md`
 
-Fichier de reprise pour une future session Codex:
+Resume file for a future Codex session:
 
-- lire `HANDOFF.md`
+- read `HANDOFF.md`
 
-Mise à jour GUI récente:
+Recent GUI updates:
 
-- auto-load local des contacts au démarrage si la base existe déjà
-- bouton `Sync Google` dans l'onglet `Contacts`
-- dialog de résumé après `Sync Google`
-- bouton `Empty DB...` avec confirmation et purge des reviews de matching
-- bouton `VACUUM DB` pour compacter la base locale
-- import CSV ciblé pour le vrai format exporté par Google Contacts
-- choix persistant des colonnes visibles dans la table contacts
-- colonne optionnelle pour afficher l'origine du contact
-- fiche contact détaillée au double-clic avec les métadonnées de source
-- menu `Help` avec `About` et `Credits`
+- local contacts auto-load on startup when the database already exists
+- `Sync Google` button in the `Contacts` tab
+- summary dialog after `Sync Google`
+- `Empty DB...` button with confirmation and matching-review purge
+- `VACUUM DB` button to compact the local database
+- CSV import targeted at the real Google Contacts export format
+- persistent visible-column selection in the contacts table
+- optional source column in the contacts table
+- detailed contact dialog on double-click with source metadata
+- `Help` menu with `About` and `Credits`
 
-## Roadmap courte
+## Short Roadmap
 
-1. Consolider la GUI comme interface locale de pilotage quotidien.
-2. Ajouter ensuite la revue manuelle des matches dans la GUI.
-3. Garder le moteur métier et la CLI stables pendant cette montée en capacité.
-4. Étendre `race_results` à d’autres providers si nécessaire.
+1. Keep consolidating the GUI as the daily local control surface.
+2. Add manual match review to the GUI next.
+3. Keep the business logic and CLI stable while the GUI grows.
+4. Extend `race_results` to other providers if needed.

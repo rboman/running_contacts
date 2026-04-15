@@ -1,7 +1,7 @@
 [project]
 name = "match-my-contacts"
 version = "0.1.0"
-description = "Outil local pour croiser contacts et résultats de courses"
+description = "Local tool for matching contacts with race results"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
