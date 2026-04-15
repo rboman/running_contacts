@@ -35,6 +35,11 @@ from match_my_contacts.config import (
 )
 from match_my_contacts.contacts.storage import ContactsRepository
 from match_my_contacts.contacts.service import import_google_contacts_csv
+from match_my_contacts.contacts.service import (
+    ensure_google_credentials_file,
+    resolve_google_sync_paths,
+    sync_google_contacts,
+)
 from match_my_contacts.matching.models import MatchReport, MatchResult
 from match_my_contacts.matching.service import (
     export_selected_matches_csv,
@@ -105,7 +110,8 @@ class MainWindow(QMainWindow):
         self.matching_reviewed_only_checkbox = QCheckBox("Reviewed only")
 
         self.contacts_load_button = QPushButton("Load contacts")
-        self.contacts_import_button = QPushButton("Import CSV")
+        self.contacts_sync_button = QPushButton("Sync Google")
+        self.contacts_import_button = QPushButton("Import Google CSV")
         self.contacts_export_button = QPushButton("Export JSON")
         self.contacts_columns_button = QPushButton("Columns...")
         self.list_datasets_button = QPushButton("List datasets")
@@ -130,6 +136,7 @@ class MainWindow(QMainWindow):
 
         self.table_presenter = TablePresenter(self.table)
         self._apply_icons()
+        self._apply_tooltips()
 
         central_widget = QWidget()
         layout = QHBoxLayout(central_widget)
@@ -137,6 +144,10 @@ class MainWindow(QMainWindow):
         self.controls_tabs.addTab(self._build_race_results_tab(), "Race Results")
         self.controls_tabs.addTab(self._build_matching_tab(), "Matching")
         self.controls_tabs.addTab(self._build_config_tab(), "Config")
+        self.controls_tabs.setTabToolTip(0, "Browse, import, export, and inspect local contacts.")
+        self.controls_tabs.setTabToolTip(1, "Fetch races, list datasets, and inspect stored race results.")
+        self.controls_tabs.setTabToolTip(2, "Run matching and filter the visible match rows.")
+        self.controls_tabs.setTabToolTip(3, "Inspect and edit local application paths.")
 
         layout.addWidget(self.controls_tabs, stretch=0)
         layout.addWidget(self.table, stretch=1)
@@ -147,6 +158,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("GUI ready.")
 
         self.contacts_load_button.clicked.connect(self.load_contacts)
+        self.contacts_sync_button.clicked.connect(self.sync_google_contacts)
         self.contacts_import_button.clicked.connect(self.import_contacts_csv)
         self.contacts_export_button.clicked.connect(self.export_contacts_json)
         self.contacts_columns_button.clicked.connect(self.edit_contact_columns)
@@ -184,6 +196,7 @@ class MainWindow(QMainWindow):
         self.contacts_query_input.setPlaceholderText("Search by name, email, or phone")
         layout.addWidget(self.contacts_query_input)
         layout.addWidget(self.contacts_load_button)
+        layout.addWidget(self.contacts_sync_button)
         layout.addWidget(self.contacts_import_button)
         layout.addWidget(self.contacts_export_button)
         layout.addWidget(self.contacts_columns_button)
@@ -298,6 +311,25 @@ class MainWindow(QMainWindow):
             contact_count = self._load_contacts_into_table()
             self.statusBar().showMessage(
                 f"Imported {stats.written_count} contacts from {csv_path}. "
+                f"Showing {contact_count} contacts."
+            )
+        except Exception as exc:
+            self._show_error(exc)
+
+    def sync_google_contacts(self) -> None:
+        try:
+            resolved_paths = resolve_google_sync_paths(app_paths=self.app_paths)
+            ensure_google_credentials_file(resolved_paths.credentials_path)
+            stats = sync_google_contacts(
+                credentials_path=resolved_paths.credentials_path,
+                token_path=resolved_paths.token_path,
+                db_path=resolved_paths.db_path,
+                source_account="default",
+            )
+            contact_count = self._load_contacts_into_table()
+            self.statusBar().showMessage(
+                f"Synced Google contacts: {stats.fetched_count} fetched, "
+                f"{stats.written_count} written, {stats.deactivated_count} deactivated. "
                 f"Showing {contact_count} contacts."
             )
         except Exception as exc:
@@ -662,6 +694,10 @@ class MainWindow(QMainWindow):
             standard_pixmap=QStyle.StandardPixmap.SP_BrowserReload,
         )
         apply_button_icon(
+            self.contacts_sync_button,
+            standard_pixmap=QStyle.StandardPixmap.SP_DialogApplyButton,
+        )
+        apply_button_icon(
             self.contacts_import_button,
             standard_pixmap=QStyle.StandardPixmap.SP_DialogOpenButton,
         )
@@ -714,6 +750,106 @@ class MainWindow(QMainWindow):
             self.credits_action,
             owner=self,
             standard_pixmap=QStyle.StandardPixmap.SP_DialogHelpButton,
+        )
+
+    def _apply_tooltips(self) -> None:
+        self.help_menu.setToolTipsVisible(True)
+        self.help_menu.setToolTip("Open application help and credits.")
+        self.about_action.setToolTip("Show a short description of the desktop application.")
+        self.about_action.setStatusTip(self.about_action.toolTip())
+        self.credits_action.setToolTip("Show the main technologies and credits behind the app.")
+        self.credits_action.setStatusTip(self.credits_action.toolTip())
+
+        self.contacts_query_input.setToolTip(
+            "Filter the local contacts table by name, email address, or phone number."
+        )
+        self.contacts_load_button.setToolTip(
+            "Reload contacts from the local SQLite database and show them in the main table."
+        )
+        self.contacts_sync_button.setToolTip(
+            "Sync Google Contacts into the local SQLite database using the configured credentials."
+        )
+        self.contacts_import_button.setToolTip(
+            "Import a Google Contacts CSV export into the local contacts database."
+        )
+        self.contacts_export_button.setToolTip(
+            "Export the current local contacts cache to a JSON file."
+        )
+        self.contacts_columns_button.setToolTip(
+            "Choose which contact columns are visible in the table."
+        )
+
+        self.results_url_input.setToolTip(
+            "Paste the public ACN Timing URL of a race to fetch and store it locally."
+        )
+        self.results_dataset_input.setToolTip(
+            "Enter a dataset id or alias to inspect stored race results."
+        )
+        self.results_alias_input.setToolTip(
+            "Enter a memorable alias for the currently selected dataset."
+        )
+        self.list_datasets_button.setToolTip(
+            "List all stored race datasets in the main table."
+        )
+        self.show_results_button.setToolTip(
+            "Show the stored results for the dataset id or alias entered above."
+        )
+        self.fetch_acn_button.setToolTip(
+            "Fetch an ACN Timing race from the URL above and save it to the local database."
+        )
+        self.add_alias_button.setToolTip(
+            "Attach the alias above to the currently selected or entered dataset."
+        )
+
+        self.matching_dataset_input.setToolTip(
+            "Enter the dataset id or alias to run matching on."
+        )
+        self.matching_status_combo.setToolTip(
+            "Filter matches by accepted rows, ambiguous rows, or both."
+        )
+        self.matching_sort_combo.setToolTip(
+            "Choose how matching rows are sorted in the table."
+        )
+        self.matching_team_input.setToolTip(
+            "Filter matching rows by team name."
+        )
+        self.matching_name_query_input.setToolTip(
+            "Filter matching rows by athlete name or matched contact name."
+        )
+        self.matching_category_input.setToolTip(
+            "Filter matching rows by race category."
+        )
+        self.matching_reviewed_only_checkbox.setToolTip(
+            "Only show rows that were explicitly reviewed in the local database."
+        )
+        self.run_matching_button.setToolTip(
+            "Run or refresh matching for the selected dataset using the local contacts database."
+        )
+        self.export_matches_button.setToolTip(
+            "Export the currently visible matching rows to a CSV file."
+        )
+
+        self.config_path_display.setToolTip(
+            "Read-only path to the current application config file."
+        )
+        self.data_dir_display.setToolTip(
+            "Read-only path to the current local data directory."
+        )
+        self.credentials_path_display.setToolTip(
+            "Read-only path to the configured Google credentials file, if any."
+        )
+        self.edit_config_button.setToolTip(
+            "Edit the configured data directory and optional credentials file."
+        )
+        self.reload_config_button.setToolTip(
+            "Reload the application config from disk."
+        )
+
+        self.controls_tabs.setToolTip(
+            "Use these tabs to switch between contacts, race results, matching, and config tools."
+        )
+        self.table.setToolTip(
+            "Main results table. Double-click a contact row to open its detailed local record."
         )
 
     def _load_contacts_into_table(self) -> int:

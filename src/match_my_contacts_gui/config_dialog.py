@@ -31,6 +31,11 @@ class ConfigDialog(QDialog):
         self.credentials_path_input = QLineEdit(
             str(app_paths.credentials_path) if app_paths.credentials_path is not None else ""
         )
+        self.config_path_label.setToolTip("Read-only path to the current config file.")
+        self.data_dir_input.setToolTip("Choose where local SQLite databases, exports, and tokens are stored.")
+        self.credentials_path_input.setToolTip(
+            "Optional path to the Google OAuth credentials JSON file used by CLI sync commands."
+        )
 
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
@@ -45,6 +50,12 @@ class ConfigDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if ok_button is not None:
+            ok_button.setToolTip("Save these config values to disk.")
+        if cancel_button is not None:
+            cancel_button.setToolTip("Close this dialog without saving changes.")
         layout.addWidget(buttons)
 
     def selected_data_dir(self) -> Path:
@@ -77,6 +88,7 @@ class ConfigDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         button = QPushButton("Browse")
         button.clicked.connect(callback)
+        button.setToolTip("Open a file or folder chooser for this setting.")
         layout.addWidget(line_edit)
         layout.addWidget(button)
         return container

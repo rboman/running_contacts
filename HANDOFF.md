@@ -4,7 +4,13 @@ Read this file first when resuming work on `match-my-contacts` in a later Codex 
 
 ## Current State
 
-- `contacts` is implemented and syncs one Google account into `contacts.sqlite3` under the configured `data_dir`.
+- `contacts` now supports multiple local contact sources in the same `contacts.sqlite3` under the configured `data_dir`.
+- the currently implemented providers are:
+  - `google_people` for Google People API syncs
+  - `google_contacts_csv` for Google Contacts CSV snapshot imports
+- contacts keep their precise `source`, `source_account`, and `source_contact_id`
+- resync and reimport boundaries are isolated per source/account slot
+- contacts now expose derived source metadata such as label, behavior, syncability, and display text
 - `race_results` is implemented for ACN Timing / Chronorace and stores local datasets in `race_results.sqlite3` under the configured `data_dir`.
 - `matching` is implemented with:
   - exact and fuzzy matching,
@@ -22,7 +28,11 @@ Read this file first when resuming work on `match-my-contacts` in a later Codex 
 Current GUI capabilities:
 
 - load contacts from the local database
+- sync Google contacts into the local database
+- import Google Contacts CSV exports into the local database
 - export contacts to JSON
+- choose visible contact columns, including source visibility
+- open a read-only contact details dialog with source metadata and raw JSON
 - fetch ACN datasets
 - list datasets and show stored race results
 - add dataset aliases
@@ -31,8 +41,8 @@ Current GUI capabilities:
 
 Still CLI-only for now:
 
-- Google Contacts sync
 - manual review actions on matches
+- advanced source inspection via `contacts list-sources`
 
 ## Config / Shared Data
 
@@ -110,12 +120,17 @@ Sync contacts:
 
 ```bash
 match-my-contacts contacts sync
+match-my-contacts contacts sync-google
+match-my-contacts contacts import-google-csv --csv-path /path/to/google-contacts.csv
+match-my-contacts contacts list-sources
 ```
 
 Inspect contacts and aliases:
 
 ```bash
 match-my-contacts contacts list --query noel
+match-my-contacts contacts list --source google_people
+match-my-contacts contacts list --source google_contacts_csv
 match-my-contacts contacts list-aliases
 ```
 
@@ -197,9 +212,10 @@ match-my-contacts-gui
 Recent GUI additions to keep in mind:
 
 - local contacts auto-load on startup when `contacts.sqlite3` already exists
-- `Contacts` can now import Google Contacts CSV exports directly from the GUI
+- `Contacts` can now sync Google and import Google Contacts CSV exports directly from the GUI
 - contacts table column visibility is stored in Qt settings, not in `config.toml`
-- double-clicking a contact row opens a read-only details dialog with DB metadata and raw JSON
+- the optional source column exposes the origin of each contact in the table
+- double-clicking a contact row opens a read-only details dialog with DB metadata, source metadata, and raw JSON
 - the GUI now includes a `Help` menu with `About` and `Credits`
 
 Current CSV assumption:

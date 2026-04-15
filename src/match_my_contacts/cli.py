@@ -3,7 +3,12 @@ from pathlib import Path
 import typer
 
 from match_my_contacts.config import AppPaths, default_credentials_path, get_app_paths
-from match_my_contacts.contacts.service import sync_google_contacts
+from match_my_contacts.contacts.service import (
+    ensure_google_credentials_file,
+    import_google_contacts_csv,
+    resolve_google_sync_paths,
+    sync_google_contacts,
+)
 from match_my_contacts.contacts.storage import ContactsRepository
 from match_my_contacts.matching.service import (
     export_selected_matches_csv,
@@ -86,6 +91,57 @@ def _app_paths() -> AppPaths:
     return get_app_paths()
 
 
+def _run_contacts_sync_google(
+    *,
+    credentials_path: Path | None = typer.Option(
+        None,
+        "--credentials",
+        file_okay=True,
+        dir_okay=False,
+        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise credentials.json a la racine du projet si present.",
+    ),
+    db_path: Path | None = typer.Option(
+        None,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+    token_path: Path | None = typer.Option(
+        None,
+        "--token-path",
+        help="Chemin local pour stocker le token OAuth.",
+    ),
+    account: str = typer.Option(
+        "default",
+        "--account",
+        help="Nom logique du compte source dans la base locale.",
+    ),
+) -> None:
+    app_paths = _app_paths()
+    resolved_paths = resolve_google_sync_paths(
+        app_paths=app_paths,
+        db_path=db_path,
+        token_path=token_path,
+        credentials_path=credentials_path,
+    )
+    try:
+        ensure_google_credentials_file(resolved_paths.credentials_path)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    stats = sync_google_contacts(
+        credentials_path=resolved_paths.credentials_path,
+        token_path=resolved_paths.token_path,
+        db_path=resolved_paths.db_path,
+        source_account=account,
+    )
+    typer.echo(
+        "Sync completed: "
+        f"{stats.fetched_count} fetched, "
+        f"{stats.written_count} written, "
+        f"{stats.deactivated_count} deactivated."
+    )
+
+
 @contacts_app.command("sync")
 def contacts_sync(
     credentials_path: Path | None = typer.Option(
@@ -111,26 +167,78 @@ def contacts_sync(
         help="Nom logique du compte source dans la base locale.",
     ),
 ) -> None:
-    """Synchronise Google Contacts vers SQLite."""
-    app_paths = _app_paths()
-    fallback_credentials_path = default_credentials_path()
-    resolved_db_path = db_path or app_paths.contacts_db
-    resolved_token_path = token_path or app_paths.google_token
-    resolved_credentials_path = credentials_path or app_paths.credentials_path or fallback_credentials_path
-    if not resolved_credentials_path.exists() or not resolved_credentials_path.is_file():
-        raise typer.BadParameter(
-            "Google OAuth credentials file not found. "
-            "Pass --credentials /path/to/credentials.json or place credentials.json at the repository root."
-        )
+    """Alias retrocompatible pour la synchronisation Google Contacts."""
+    _run_contacts_sync_google(
+        credentials_path=credentials_path,
+        db_path=db_path,
+        token_path=token_path,
+        account=account,
+    )
 
-    stats = sync_google_contacts(
-        credentials_path=resolved_credentials_path,
-        token_path=resolved_token_path,
-        db_path=resolved_db_path,
+
+@contacts_app.command("sync-google")
+def contacts_sync_google(
+    credentials_path: Path | None = typer.Option(
+        None,
+        "--credentials",
+        file_okay=True,
+        dir_okay=False,
+        help="Chemin vers le fichier OAuth client secret Google. Par defaut, utilise credentials.json a la racine du projet si present.",
+    ),
+    db_path: Path | None = typer.Option(
+        None,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+    token_path: Path | None = typer.Option(
+        None,
+        "--token-path",
+        help="Chemin local pour stocker le token OAuth.",
+    ),
+    account: str = typer.Option(
+        "default",
+        "--account",
+        help="Nom logique du compte source dans la base locale.",
+    ),
+) -> None:
+    """Synchronise explicitement Google Contacts vers SQLite."""
+    _run_contacts_sync_google(
+        credentials_path=credentials_path,
+        db_path=db_path,
+        token_path=token_path,
+        account=account,
+    )
+
+
+@contacts_app.command("import-google-csv")
+def contacts_import_google_csv(
+    csv_path: Path = typer.Option(
+        ...,
+        "--csv-path",
+        file_okay=True,
+        dir_okay=False,
+        exists=True,
+        help="Chemin vers un export CSV Google Contacts.",
+    ),
+    db_path: Path | None = typer.Option(
+        None,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+    account: str = typer.Option(
+        "default",
+        "--account",
+        help="Nom logique du slot d'import pour cette source.",
+    ),
+) -> None:
+    """Importe un export CSV Google Contacts dans SQLite."""
+    stats = import_google_contacts_csv(
+        csv_path=csv_path,
+        db_path=db_path or _app_paths().contacts_db,
         source_account=account,
     )
     typer.echo(
-        "Sync completed: "
+        "Import completed: "
         f"{stats.fetched_count} fetched, "
         f"{stats.written_count} written, "
         f"{stats.deactivated_count} deactivated."
@@ -155,11 +263,16 @@ def contacts_list(
         "--include-inactive",
         help="Inclure les contacts absents de la dernière synchronisation.",
     ),
+    source: str | None = typer.Option(
+        None,
+        "--source",
+        help="Filtrer sur une source precise, par exemple google_people ou google_contacts_csv.",
+    ),
 ) -> None:
     """Liste les contacts locaux sans appeler Google."""
     repository = ContactsRepository(db_path or _app_paths().contacts_db)
     repository.initialize()
-    contacts = repository.list_contacts(query=query, include_inactive=include_inactive)
+    contacts = repository.list_contacts(query=query, include_inactive=include_inactive, source=source)
 
     if not contacts:
         typer.echo("No contacts found.")
@@ -169,11 +282,46 @@ def contacts_list(
         methods = ", ".join(method["value"] for method in contact["methods"])
         aliases = ", ".join(contact["aliases"])
         status = "" if contact["active"] else " [inactive]"
-        line = f"{contact['id']}: {contact['display_name']}{status}"
+        line = f"{contact['id']}: {contact['display_name']}{status} [{contact['source_display']}]"
         if methods:
             line = f"{line} - {methods}"
         if aliases:
             line = f"{line} - aliases: {aliases}"
+        typer.echo(line)
+
+
+@contacts_app.command("list-sources")
+def contacts_list_sources(
+    db_path: Path | None = typer.Option(
+        None,
+        "--db-path",
+        help="Chemin vers la base SQLite locale.",
+    ),
+) -> None:
+    """Liste les sources contacts connues, leurs volumes et leur dernier run."""
+    repository = ContactsRepository(db_path or _app_paths().contacts_db)
+    repository.initialize()
+    sources = repository.list_source_summaries()
+
+    if not sources:
+        typer.echo("No contact sources found.")
+        raise typer.Exit(code=0)
+
+    for source_summary in sources:
+        line = (
+            f"{source_summary['source']}/{source_summary['source_account']}: "
+            f"{source_summary['source_label']} "
+            f"[{source_summary['source_behavior']}] - "
+            f"{source_summary['active_contacts']} active, "
+            f"{source_summary['inactive_contacts']} inactive"
+        )
+        if source_summary["last_run_id"] is not None:
+            line = (
+                f"{line} - last run #{source_summary['last_run_id']} "
+                f"{source_summary['last_run_status']}"
+            )
+            if source_summary["last_run_completed_at"]:
+                line = f"{line} at {source_summary['last_run_completed_at']}"
         typer.echo(line)
 
 

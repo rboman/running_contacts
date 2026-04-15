@@ -91,6 +91,35 @@ def test_contacts_sync_command(monkeypatch: object, tmp_path: Path) -> None:
     assert "3 fetched, 3 written, 0 deactivated" in result.stdout
 
 
+def test_contacts_sync_google_command(monkeypatch: object, tmp_path: Path) -> None:
+    credentials_path = tmp_path / "credentials.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+    db_path = tmp_path / "contacts.sqlite3"
+    token_path = tmp_path / "token.json"
+
+    def fake_sync_google_contacts(**_: object) -> SyncStats:
+        return SyncStats(fetched_count=2, written_count=2, deactivated_count=1, sync_run_id=1)
+
+    monkeypatch.setattr("match_my_contacts.cli.sync_google_contacts", fake_sync_google_contacts)
+
+    result = runner.invoke(
+        app,
+        [
+            "contacts",
+            "sync-google",
+            "--credentials",
+            str(credentials_path),
+            "--db-path",
+            str(db_path),
+            "--token-path",
+            str(token_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "2 fetched, 2 written, 1 deactivated" in result.stdout
+
+
 def test_contacts_sync_uses_default_credentials_file(monkeypatch: object, tmp_path: Path) -> None:
     credentials_path = tmp_path / "credentials.json"
     credentials_path.write_text("{}", encoding="utf-8")
@@ -166,6 +195,137 @@ def test_contacts_list_command_reads_local_database(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "No contacts found." in result.stdout
+
+
+def test_contacts_import_google_csv_command(tmp_path: Path) -> None:
+    csv_path = tmp_path / "google-contacts.csv"
+    db_path = tmp_path / "contacts.sqlite3"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "Name,Given Name,Family Name,E-mail 1 - Type,E-mail 1 - Value",
+                "Alice Example,Alice,Example,Home,alice@example.com",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "contacts",
+            "import-google-csv",
+            "--csv-path",
+            str(csv_path),
+            "--db-path",
+            str(db_path),
+        ],
+    )
+
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    contacts = repository.list_contacts()
+
+    assert result.exit_code == 0
+    assert "1 fetched, 1 written, 0 deactivated" in result.stdout
+    assert len(contacts) == 1
+    assert contacts[0]["source"] == "google_contacts_csv"
+
+
+def test_contacts_list_can_filter_by_source(tmp_path: Path) -> None:
+    db_path = tmp_path / "contacts.sqlite3"
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    google_sync_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source_contact_id="people/1",
+                display_name="Alice Example",
+                raw_payload={"resourceName": "people/1"},
+            )
+        ],
+        sync_run_id=google_sync_id,
+    )
+    csv_sync_id = repository.begin_sync_run(source="google_contacts_csv", source_account="default")
+    repository.replace_contacts(
+        source="google_contacts_csv",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source="google_contacts_csv",
+                source_contact_id="csv/1",
+                display_name="Bob Example",
+                raw_payload={"row": 1},
+            )
+        ],
+        sync_run_id=csv_sync_id,
+    )
+
+    result = runner.invoke(
+        app,
+        ["contacts", "list", "--db-path", str(db_path), "--source", "google_contacts_csv"],
+    )
+
+    assert result.exit_code == 0
+    assert "Bob Example" in result.stdout
+    assert "Alice Example" not in result.stdout
+    assert "Google Contacts CSV (default)" in result.stdout
+
+
+def test_contacts_list_sources_command(tmp_path: Path) -> None:
+    db_path = tmp_path / "contacts.sqlite3"
+    repository = ContactsRepository(db_path)
+    repository.initialize()
+    google_sync_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source_contact_id="people/1",
+                display_name="Alice Example",
+                raw_payload={"resourceName": "people/1"},
+            )
+        ],
+        sync_run_id=google_sync_id,
+    )
+    repository.finish_sync_run(
+        sync_run_id=google_sync_id,
+        status="completed",
+        contacts_fetched=1,
+        contacts_written=1,
+        contacts_deactivated=0,
+    )
+    csv_sync_id = repository.begin_sync_run(source="google_contacts_csv", source_account="default")
+    repository.replace_contacts(
+        source="google_contacts_csv",
+        source_account="default",
+        contacts=[
+            ContactRecord(
+                source="google_contacts_csv",
+                source_contact_id="csv/1",
+                display_name="Bob Example",
+                raw_payload={"row": 1},
+            )
+        ],
+        sync_run_id=csv_sync_id,
+    )
+    repository.finish_sync_run(
+        sync_run_id=csv_sync_id,
+        status="completed",
+        contacts_fetched=1,
+        contacts_written=1,
+        contacts_deactivated=0,
+    )
+
+    result = runner.invoke(app, ["contacts", "list-sources", "--db-path", str(db_path)])
+
+    assert result.exit_code == 0
+    assert "google_people/default: Google Contacts API [syncable_api]" in result.stdout
+    assert "google_contacts_csv/default: Google Contacts CSV [snapshot_import]" in result.stdout
 
 
 def test_race_results_fetch_acn_command(monkeypatch: object, tmp_path: Path) -> None:

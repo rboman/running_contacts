@@ -19,7 +19,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QDialog, QGroupBox, QStatusBar, QTableWidget
 
-from match_my_contacts.config import get_app_paths
+from match_my_contacts.config import AppPaths, get_app_paths
 from match_my_contacts_gui.main_window import MainWindow
 
 
@@ -449,6 +449,23 @@ def test_main_window_exposes_help_menu_actions(qt_app: QApplication, tmp_path: P
     window.close()
 
 
+def test_main_window_sets_tooltips_on_main_actions(qt_app: QApplication, tmp_path: Path) -> None:
+    window = MainWindow(
+        contacts_db_path=tmp_path / "contacts.sqlite3",
+        results_db_path=tmp_path / "race_results.sqlite3",
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    assert "Reload contacts" in window.contacts_load_button.toolTip()
+    assert "Sync Google Contacts" in window.contacts_sync_button.toolTip()
+    assert "Google Contacts CSV" in window.contacts_import_button.toolTip()
+    assert "ACN Timing URL" in window.results_url_input.toolTip()
+    assert "Double-click a contact row" in window.table.toolTip()
+    assert "short description" in window.about_action.toolTip()
+
+    window.close()
+
+
 def test_main_window_auto_loads_contacts_when_database_exists(qt_app: QApplication, tmp_path: Path) -> None:
     contacts_db = build_contacts_db(tmp_path)
     window = MainWindow(
@@ -512,14 +529,15 @@ def test_contact_columns_can_be_saved_and_restored(
             return QDialog.DialogCode.Accepted
 
         def selected_column_ids(self) -> list[str]:
-            return ["display_name", "email", "organization"]
+            return ["display_name", "source", "organization"]
 
     monkeypatch.setattr("match_my_contacts_gui.main_window.ContactsColumnsDialog", FakeDialog)
 
     window.contacts_columns_button.click()
     qt_app.processEvents()
 
-    assert table_headers(window.table) == ["display_name", "email", "organization"]
+    assert table_headers(window.table) == ["display_name", "source", "organization"]
+    assert window.table.item(0, 1).text() == "Google Contacts API (default)"
     window.close()
 
     restored_window = MainWindow(
@@ -528,7 +546,7 @@ def test_contact_columns_can_be_saved_and_restored(
         settings=build_gui_settings(settings_path),
     )
 
-    assert table_headers(restored_window.table) == ["display_name", "email", "organization"]
+    assert table_headers(restored_window.table) == ["display_name", "source", "organization"]
     restored_window.close()
 
 
@@ -561,6 +579,8 @@ def test_double_click_contact_opens_details_dialog(
     contact_details = captured["contact_details"]
     assert isinstance(contact_details, dict)
     assert contact_details["display_name"] == "Alice Example"
+    assert contact_details["source_label"] == "Google Contacts API"
+    assert contact_details["source_behavior"] == "syncable_api"
     assert contact_details["raw_json_text"]
 
     window.close()
@@ -627,6 +647,63 @@ def test_import_contacts_csv_through_gui(
     assert window.table.item(0, 1).text() == "Alice Example"
     assert "Imported 1 contacts from" in window.statusBar().currentMessage()
     assert "Showing 1 contacts." in window.statusBar().currentMessage()
+
+    window.close()
+
+
+def test_sync_google_contacts_through_gui(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: object
+) -> None:
+    credentials_path = tmp_path / "credentials.json"
+    credentials_path.write_text("{}", encoding="utf-8")
+    contacts_db = tmp_path / "contacts.sqlite3"
+    app_paths = AppPaths(data_dir=tmp_path, credentials_path=credentials_path)
+    window = MainWindow(
+        contacts_db_path=contacts_db,
+        results_db_path=tmp_path / "race_results.sqlite3",
+        app_paths=app_paths,
+        settings=build_gui_settings(tmp_path / "gui-settings.ini"),
+    )
+
+    def fake_sync_google_contacts(
+        *,
+        credentials_path: Path,
+        token_path: Path,
+        db_path: Path,
+        source_account: str,
+    ) -> object:
+        assert credentials_path.name == "credentials.json"
+        assert token_path.name == "token.json"
+        assert db_path == contacts_db
+        repository = ContactsRepository(db_path)
+        repository.initialize()
+        sync_run_id = repository.begin_sync_run(source="google_people", source_account=source_account)
+        repository.replace_contacts(
+            source="google_people",
+            source_account=source_account,
+            contacts=[
+                ContactRecord(
+                    source_contact_id="people/1",
+                    display_name="Alice Example",
+                    raw_payload={"resourceName": "people/1"},
+                )
+            ],
+            sync_run_id=sync_run_id,
+        )
+        return type("Stats", (), {
+            "fetched_count": 1,
+            "written_count": 1,
+            "deactivated_count": 0,
+        })()
+
+    monkeypatch.setattr("match_my_contacts_gui.main_window.sync_google_contacts", fake_sync_google_contacts)
+
+    window.contacts_sync_button.click()
+    qt_app.processEvents()
+
+    assert window.table.rowCount() == 1
+    assert window.table.item(0, 1).text() == "Alice Example"
+    assert "Synced Google contacts: 1 fetched, 1 written, 0 deactivated." in window.statusBar().currentMessage()
 
     window.close()
 

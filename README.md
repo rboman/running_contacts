@@ -22,10 +22,12 @@ Une extension envisagée ensuite est l’analyse de documents longs, par exemple
 
 ## État actuel
 
-La première brique `contacts` est en place pour un compte Google:
+La première brique `contacts` gère maintenant plusieurs sources locales de contacts:
 
-- OAuth Desktop via Google People API.
-- Synchronisation complète réexécutable vers `contacts.sqlite3` dans le `data_dir` configuré.
+- OAuth Desktop via Google People API (`google_people`).
+- Import snapshot d'exports Google Contacts CSV (`google_contacts_csv`).
+- Coexistence de plusieurs sources dans la même base SQLite sans fusion automatique.
+- Resync et réimport isolés par `source` et `source_account`.
 - Consultation locale sans appel réseau.
 - Export JSON de l’état local.
 
@@ -140,7 +142,14 @@ Synchroniser les contacts Google vers SQLite:
 
 ```bash
 match-my-contacts contacts sync
+match-my-contacts contacts sync-google
 match-my-contacts contacts sync --credentials /chemin/vers/credentials.json
+```
+
+Importer un export Google Contacts CSV dans la base locale:
+
+```bash
+match-my-contacts contacts import-google-csv --csv-path /chemin/vers/google-contacts.csv
 ```
 
 Récupérer un tableau de résultats ACN Timing:
@@ -181,6 +190,8 @@ Lister les contacts locaux:
 ```bash
 match-my-contacts contacts list
 match-my-contacts contacts list --query dupont
+match-my-contacts contacts list --source google_people
+match-my-contacts contacts list-sources
 ```
 
 Exporter l’état local en JSON:
@@ -207,16 +218,19 @@ La GUI actuelle reste volontairement simple, mais elle est déjà utile au quoti
 - sections `Contacts`, `Race Results` et `Matching`,
 - menu `Help` avec `About` et `Credits`,
 - table centrale unique,
+- sync Google depuis l'onglet `Contacts`,
 - auto-load local des contacts au dÃ©marrage quand la base existe dÃ©jÃ ,
 - import CSV ciblÃ© pour les exports Google Contacts,
 - choix des colonnes visibles dans la table contacts,
-- fiche contact dÃ©taillÃ©e au double-clic,
+- visibilité optionnelle de l'origine des contacts dans la table,
+- fiche contact dÃ©taillÃ©e au double-clic avec les mÃ©tadonnÃ©es de source,
 - import ACN depuis l'interface,
 - ajout d'alias de dataset,
 - export JSON des contacts,
 - filtrage local du matching et export CSV,
 - visualisation et édition de la configuration locale,
-- sync Google et reviews manuelles encore laissées à la CLI.
+- aucun auto-sync réseau au démarrage,
+- reviews manuelles encore laissées à la CLI.
 
 ## Migration vers Dropbox
 
@@ -247,9 +261,11 @@ sed -n '1,220p' HANDOFF.md
 Mise Ã  jour GUI rÃ©cente:
 
 - auto-load local des contacts au dÃ©marrage si la base existe dÃ©jÃ 
+- bouton `Sync Google` dans l'onglet `Contacts`
 - import CSV ciblÃ© pour les exports Google Contacts
 - choix persistant des colonnes visibles dans la table contacts
-- fiche contact dÃ©taillÃ©e au double-clic
+- colonne optionnelle pour afficher l'origine du contact
+- fiche contact dÃ©taillÃ©e au double-clic avec les mÃ©tadonnÃ©es de source
 - menu `Help` avec `About` et `Credits`
 
 ## Roadmap courte

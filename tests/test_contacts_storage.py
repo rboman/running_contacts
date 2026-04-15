@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from match_my_contacts.contacts.models import ContactMethod, ContactRecord
+from match_my_contacts.contacts.sources import SOURCE_BEHAVIOR_SYNCABLE_API
 from match_my_contacts.contacts.storage import ContactsRepository
 
 
@@ -132,6 +133,10 @@ def test_get_contact_details_returns_enriched_fields(tmp_path: Path) -> None:
     details = repository.get_contact_details(contact_id=contact["id"])
 
     assert details["source"] == "google_people"
+    assert details["source_label"] == "Google Contacts API"
+    assert details["source_behavior"] == SOURCE_BEHAVIOR_SYNCABLE_API
+    assert details["source_syncable"] is True
+    assert details["source_display"] == "Google Contacts API (default)"
     assert details["source_contact_id"] == "people/1"
     assert details["created_at"]
     assert details["updated_at"]
@@ -141,3 +146,33 @@ def test_get_contact_details_returns_enriched_fields(tmp_path: Path) -> None:
     assert details["methods"][0]["is_primary"] is True
     assert details["alias_records"][0]["alias_text"] == "Alice Ex"
     assert details["aliases"] == ["Alice Ex"]
+
+
+def test_list_source_summaries_returns_counts_and_last_run(tmp_path: Path) -> None:
+    repository = ContactsRepository(tmp_path / "contacts.sqlite3")
+    repository.initialize()
+
+    sync_run_id = repository.begin_sync_run(source="google_people", source_account="default")
+    repository.replace_contacts(
+        source="google_people",
+        source_account="default",
+        contacts=[make_contact("people/1", "Alice Example", email="alice@example.com")],
+        sync_run_id=sync_run_id,
+    )
+    repository.finish_sync_run(
+        sync_run_id=sync_run_id,
+        status="completed",
+        contacts_fetched=1,
+        contacts_written=1,
+        contacts_deactivated=0,
+    )
+
+    summaries = repository.list_source_summaries()
+
+    assert len(summaries) == 1
+    assert summaries[0]["source"] == "google_people"
+    assert summaries[0]["source_label"] == "Google Contacts API"
+    assert summaries[0]["source_behavior"] == SOURCE_BEHAVIOR_SYNCABLE_API
+    assert summaries[0]["active_contacts"] == 1
+    assert summaries[0]["inactive_contacts"] == 0
+    assert summaries[0]["last_run_status"] == "completed"

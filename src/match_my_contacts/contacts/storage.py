@@ -9,6 +9,7 @@ from typing import Any
 from match_my_contacts.matching.normalization import normalize_person_name
 
 from .models import ContactRecord, SyncStats
+from .sources import build_source_display, get_contact_source_definition
 
 
 class ContactsRepository:
@@ -159,7 +160,13 @@ class ContactsRepository:
             sync_run_id=sync_run_id,
         )
 
-    def list_contacts(self, *, query: str | None = None, include_inactive: bool = False) -> list[dict[str, Any]]:
+    def list_contacts(
+        self,
+        *,
+        query: str | None = None,
+        include_inactive: bool = False,
+        source: str | None = None,
+    ) -> list[dict[str, Any]]:
         sql = """
             SELECT c.id,
                    c.source,
@@ -176,10 +183,12 @@ class ContactsRepository:
             FROM contacts AS c
         """
         params: list[Any] = []
+        conditions: list[str] = []
 
         if query:
-            sql += """
-                WHERE (
+            conditions.append(
+                """
+                (
                     c.display_name LIKE ?
                     OR COALESCE(c.given_name, '') LIKE ?
                     OR COALESCE(c.family_name, '') LIKE ?
@@ -190,19 +199,94 @@ class ContactsRepository:
                           AND (m.value LIKE ? OR COALESCE(m.normalized_value, '') LIKE ?)
                     )
                 )
-            """
+                """
+            )
             like_query = f"%{query}%"
             params.extend([like_query, like_query, like_query, like_query, like_query])
-            if not include_inactive:
-                sql += " AND c.active = 1"
-        elif not include_inactive:
-            sql += " WHERE c.active = 1"
+        if source:
+            conditions.append("c.source = ?")
+            params.append(source)
+        if not include_inactive:
+            conditions.append("c.active = 1")
+
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
 
         sql += " ORDER BY c.display_name COLLATE NOCASE"
 
         with self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
             return [self._row_to_contact_summary(conn, row["id"], dict(row)) for row in rows]
+
+    def list_source_summaries(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            source_rows = conn.execute(
+                """
+                SELECT source, source_account FROM contacts
+                UNION
+                SELECT source, source_account FROM sync_runs
+                ORDER BY source, source_account
+                """
+            ).fetchall()
+
+            summaries: list[dict[str, Any]] = []
+            for source_row in source_rows:
+                source = str(source_row["source"])
+                source_account = str(source_row["source_account"])
+                counts_row = conn.execute(
+                    """
+                    SELECT COUNT(*) AS total_contacts,
+                           COALESCE(SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END), 0) AS active_contacts,
+                           COALESCE(SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END), 0) AS inactive_contacts
+                    FROM contacts
+                    WHERE source = ? AND source_account = ?
+                    """,
+                    (source, source_account),
+                ).fetchone()
+                last_run_row = conn.execute(
+                    """
+                    SELECT id,
+                           status,
+                           started_at,
+                           completed_at,
+                           contacts_fetched,
+                           contacts_written,
+                           contacts_deactivated,
+                           error_message
+                    FROM sync_runs
+                    WHERE source = ? AND source_account = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (source, source_account),
+                ).fetchone()
+                summary = {
+                    "source": source,
+                    "source_account": source_account,
+                    "total_contacts": int(counts_row["total_contacts"] or 0),
+                    "active_contacts": int(counts_row["active_contacts"] or 0),
+                    "inactive_contacts": int(counts_row["inactive_contacts"] or 0),
+                    "last_run_id": int(last_run_row["id"]) if last_run_row is not None else None,
+                    "last_run_status": str(last_run_row["status"]) if last_run_row is not None else None,
+                    "last_run_started_at": str(last_run_row["started_at"]) if last_run_row is not None else None,
+                    "last_run_completed_at": (
+                        str(last_run_row["completed_at"]) if last_run_row is not None and last_run_row["completed_at"] else None
+                    ),
+                    "last_run_contacts_fetched": (
+                        int(last_run_row["contacts_fetched"]) if last_run_row is not None else None
+                    ),
+                    "last_run_contacts_written": (
+                        int(last_run_row["contacts_written"]) if last_run_row is not None else None
+                    ),
+                    "last_run_contacts_deactivated": (
+                        int(last_run_row["contacts_deactivated"]) if last_run_row is not None else None
+                    ),
+                    "last_run_error_message": (
+                        str(last_run_row["error_message"]) if last_run_row is not None and last_run_row["error_message"] else None
+                    ),
+                }
+                summaries.append(self._attach_source_metadata(summary))
+            return summaries
 
     def export_contacts(self, *, include_inactive: bool = False) -> list[dict[str, Any]]:
         return self.list_contacts(include_inactive=include_inactive)
@@ -404,7 +488,7 @@ class ContactsRepository:
         row["active"] = bool(row["active"])
         row["methods"] = self._fetch_contact_methods(conn, contact_id=contact_id)
         row["aliases"] = self._fetch_contact_aliases(conn, contact_id=contact_id)
-        return row
+        return self._attach_source_metadata(row)
 
     def _row_to_contact_details(
         self,
@@ -422,7 +506,7 @@ class ContactsRepository:
             row["raw_json"] = json.loads(raw_json_text)
         except json.JSONDecodeError:
             row["raw_json"] = raw_json_text
-        return row
+        return self._attach_source_metadata(row)
 
     def _fetch_contact_methods(
         self,
@@ -481,6 +565,18 @@ class ContactsRepository:
             (contact_id,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def _attach_source_metadata(row: dict[str, Any]) -> dict[str, Any]:
+        source = str(row.get("source") or "")
+        source_account = str(row.get("source_account") or "")
+        definition = get_contact_source_definition(source)
+        row["source_label"] = definition.label
+        row["source_family"] = definition.family
+        row["source_behavior"] = definition.behavior
+        row["source_syncable"] = definition.syncable
+        row["source_display"] = build_source_display(source=source, source_account=source_account)
+        return row
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)

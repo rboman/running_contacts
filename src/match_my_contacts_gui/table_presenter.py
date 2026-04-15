@@ -39,6 +39,7 @@ class TablePresenter:
     CONTACT_COLUMNS: tuple[ContactColumnDefinition, ...] = (
         ContactColumnDefinition("id", "id", 60),
         ContactColumnDefinition("display_name", "display_name", 180),
+        ContactColumnDefinition("source", "source", 190, default_visible=False),
         ContactColumnDefinition("email", "email", 220),
         ContactColumnDefinition("phone", "phone", 150),
         ContactColumnDefinition("organization", "organization", 180),
@@ -262,6 +263,7 @@ class TablePresenter:
         return {
             "id": str(contact.get("id", "")),
             "display_name": str(contact.get("display_name", "")),
+            "source": str(contact.get("source_display", "") or ""),
             "email": ", ".join(email_values),
             "phone": ", ".join(phone_values),
             "organization": str(contact.get("organization", "") or ""),

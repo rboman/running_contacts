@@ -41,12 +41,13 @@ Inspect the active config and resolved paths:
 match-my-contacts config show
 ```
 
-## 1. Sync contacts
+## 1. Manage contacts
 
 If `credentials.json` is at the project root:
 
 ```bash
 match-my-contacts contacts sync
+match-my-contacts contacts sync-google
 ```
 
 Useful commands:
@@ -54,10 +55,21 @@ Useful commands:
 ```bash
 match-my-contacts contacts list
 match-my-contacts contacts list --query noel
+match-my-contacts contacts list --source google_people
+match-my-contacts contacts list-sources
+match-my-contacts contacts import-google-csv --csv-path /path/to/google-contacts.csv
 match-my-contacts contacts export-json --output data/exports/contacts.json
 ```
 
 The contact ID shown by `contacts list` is useful for manual aliasing and review.
+
+Current source model:
+
+- `google_people` is a syncable API source
+- `google_contacts_csv` is a snapshot import source
+- sources remain separated in the same SQLite database
+- a Google resync only affects Google API contacts for its account slot
+- a CSV reimport only affects CSV-imported contacts for its account slot
 
 ## GUI locale
 
@@ -91,13 +103,15 @@ The GUI is intentionally simple, but already useful:
 
 - it keeps the CLI unchanged,
 - it auto-loads local contacts when the SQLite cache already exists,
-- it imports Google Contacts CSV exports, loads contacts, and exports them to JSON,
-- it lets you choose the visible contact columns and open a detailed contact dialog on double-click,
+- it syncs Google Contacts and imports Google Contacts CSV exports into the same local database,
+- it loads contacts and exports them to JSON,
+- it lets you choose the visible contact columns, including the optional source column,
+- it opens a detailed contact dialog on double-click, including source metadata and raw JSON,
 - it fetches ACN races, lists datasets, shows results, and adds dataset aliases,
 - it runs matching, applies filters, and exports the visible CSV selection,
 - it shows and edits the local configuration, including the shared data directory and optional `credentials.json` path,
 - it exposes a small `Help` menu with `About` and `Credits`,
-- it still leaves Google sync and manual review workflows to the CLI for now.
+- it still leaves manual review workflows to the CLI for now.
 
 Recommended daily GUI workflow:
 
@@ -108,9 +122,10 @@ match-my-contacts-gui
 Then:
 
 - review the auto-loaded contacts table or click `Load contacts` if needed,
-- use `Import CSV` for a Google Contacts export when you want a local snapshot without the API sync flow,
-- use `Columns...` to reduce the contacts table to the fields you care about,
-- double-click a contact row to inspect the full stored payload and DB metadata,
+- use `Sync Google` when you want to refresh the API-backed Google contacts,
+- use `Import Google CSV` when you want a local snapshot without the API sync flow,
+- use `Columns...` to reduce the contacts table to the fields you care about, including source visibility,
+- double-click a contact row to inspect the full stored payload, DB metadata, and source metadata,
 - fetch a race from its ACN URL,
 - add a short alias to the dataset,
 - run matching on that alias,
@@ -237,10 +252,18 @@ To preserve code state as well as conversation state, commit your work or at lea
 ### New race
 
 ```bash
-match-my-contacts contacts sync
+match-my-contacts contacts sync-google
 match-my-contacts race-results fetch-acn --url '...'
 match-my-contacts race-results add-alias --dataset-id 1 --alias liege-15k-2026
 match-my-contacts matching run --dataset liege-15k-2026 --include-ambiguous --limit 30
+```
+
+### Import snapshot contacts from CSV
+
+```bash
+match-my-contacts contacts import-google-csv --csv-path /path/to/google-contacts.csv
+match-my-contacts contacts list-sources
+match-my-contacts contacts list --source google_contacts_csv
 ```
 
 ### Explore one team
@@ -267,24 +290,10 @@ The current matching quality is considered good enough for now. The next develop
 Recent GUI additions:
 
 - local contacts now auto-load on startup when the contacts SQLite file already exists
-- `Contacts` now supports Google Contacts CSV imports from the desktop UI
+- `Contacts` now supports both `Sync Google` and `Import Google CSV`
 - the contacts table now supports persistent visible-column preferences via Qt settings
-- double-clicking a contact row opens a read-only details dialog with DB metadata and raw JSON
-- the desktop window now exposes a small `Help` menu with `About` and `Credits`
-
-Current CSV assumption:
-
-- the GUI import only targets the Google Contacts CSV export format for now
-- no generic CSV mapping wizard has been added yet
-
-## GUI updates
-
-Recent GUI additions:
-
-- local contacts now auto-load on startup when the contacts SQLite file already exists
-- `Contacts` now supports Google Contacts CSV imports from the desktop UI
-- the contacts table now supports persistent visible-column preferences via Qt settings
-- double-clicking a contact row opens a read-only details dialog with DB metadata and raw JSON
+- the optional source column exposes the contact origin directly in the table
+- double-clicking a contact row opens a read-only details dialog with DB metadata, source metadata, and raw JSON
 - the desktop window now exposes a small `Help` menu with `About` and `Credits`
 
 Current CSV assumption:

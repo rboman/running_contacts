@@ -4,17 +4,51 @@ import csv
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
+
+from match_my_contacts.config import AppPaths, default_credentials_path
 
 from .models import ContactMethod, ContactRecord
 from .normalization import normalize_email, normalize_phone
 from .google_people import fetch_google_contacts
 from .models import SyncStats
+from .sources import GOOGLE_CONTACTS_CSV_SOURCE, GOOGLE_PEOPLE_SOURCE
 from .storage import ContactsRepository
 
-GOOGLE_CSV_SOURCE = "google_contacts_csv"
+GOOGLE_CSV_SOURCE = GOOGLE_CONTACTS_CSV_SOURCE
 _GOOGLE_MULTI_VALUE_RE = re.compile(r"^(E-mail|Phone) (\d+) - (Type|Value)$")
 _GOOGLE_ORGANIZATION_NAME_RE = re.compile(r"^Organization (\d+) - Name$")
+
+
+@dataclass(slots=True, frozen=True)
+class GoogleSyncPaths:
+    db_path: Path
+    token_path: Path
+    credentials_path: Path
+
+
+def resolve_google_sync_paths(
+    *,
+    app_paths: AppPaths,
+    db_path: Path | None = None,
+    token_path: Path | None = None,
+    credentials_path: Path | None = None,
+) -> GoogleSyncPaths:
+    return GoogleSyncPaths(
+        db_path=db_path or app_paths.contacts_db,
+        token_path=token_path or app_paths.google_token,
+        credentials_path=credentials_path or app_paths.credentials_path or default_credentials_path(),
+    )
+
+
+def ensure_google_credentials_file(credentials_path: Path) -> Path:
+    if not credentials_path.exists() or not credentials_path.is_file():
+        raise ValueError(
+            "Google OAuth credentials file not found. "
+            "Pass --credentials /path/to/credentials.json or place credentials.json at the repository root."
+        )
+    return credentials_path
 
 
 def sync_google_contacts(
@@ -26,7 +60,7 @@ def sync_google_contacts(
 ) -> SyncStats:
     repository = ContactsRepository(db_path)
     repository.initialize()
-    sync_run_id = repository.begin_sync_run(source="google_people", source_account=source_account)
+    sync_run_id = repository.begin_sync_run(source=GOOGLE_PEOPLE_SOURCE, source_account=source_account)
 
     try:
         contacts = fetch_google_contacts(
@@ -35,7 +69,7 @@ def sync_google_contacts(
             source_account=source_account,
         )
         stats = repository.replace_contacts(
-            source="google_people",
+            source=GOOGLE_PEOPLE_SOURCE,
             source_account=source_account,
             contacts=contacts,
             sync_run_id=sync_run_id,

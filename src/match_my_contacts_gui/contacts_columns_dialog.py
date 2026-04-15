@@ -29,12 +29,15 @@ class ContactsColumnsDialog(QDialog):
         self.resize(360, 320)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Choose which columns to show in the contacts table."))
+        intro_label = QLabel("Choose which columns to show in the contacts table.")
+        intro_label.setToolTip("These preferences are stored locally for future GUI launches.")
+        layout.addWidget(intro_label)
 
         selected = set(visible_column_ids)
         for column in columns:
             checkbox = QCheckBox(column.header.replace("_", " ").title())
             checkbox.setChecked(column.key in selected)
+            checkbox.setToolTip(f"Show or hide the '{column.header}' column in the contacts table.")
             self._checkboxes[column.key] = checkbox
             layout.addWidget(checkbox)
 
@@ -43,6 +46,12 @@ class ContactsColumnsDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if ok_button is not None:
+            ok_button.setToolTip("Save the current visible-column selection.")
+        if cancel_button is not None:
+            cancel_button.setToolTip("Close this dialog without changing the visible columns.")
         layout.addWidget(buttons)
 
     def selected_column_ids(self) -> list[str]:
