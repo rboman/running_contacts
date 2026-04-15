@@ -15,7 +15,7 @@ Read this file first when resuming work on `running_contacts` in a later Codex s
 - a first desktop GUI is now implemented on top of the existing local-first workflow.
 - the default data location is now resolved through a machine-local config file that points to a `data_dir`
 - packaging now targets Python `3.10+`; on Python 3.10 the config loader uses `tomli` as a fallback for `tomllib`
-- GitHub Actions now runs `pytest -q` on `ubuntu-latest` for Python `3.10` and `3.11`
+- GitHub Actions now runs `pytest -q` on `ubuntu-latest` for Python `3.10` and `3.12`
 
 ## GUI Status
 
