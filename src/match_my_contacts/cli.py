@@ -241,7 +241,7 @@ def contacts_import_google_csv(
             source_account=account,
         )
     except ValueError as exc:
-        typer.echo(f"Error: {exc}")
+        typer.echo(str(exc))
         raise typer.Exit(code=2)
     typer.echo(
         "Import completed: "

@@ -484,7 +484,7 @@ def test_help_dialogs_include_repository_and_credits_links(
     assert "OpenAI Codex" in captured["credits_text"]
 
     window.close()
-def test_file_dialogs_remember_last_directory_in_main_window(
+def test_main_window_remembers_file_dialog_directories(
     qt_app: QApplication, tmp_path: Path, monkeypatch: object
 ) -> None:
     contacts_db = build_contacts_db(tmp_path)

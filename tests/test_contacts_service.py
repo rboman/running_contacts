@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from match_my_contacts.contacts.service import GOOGLE_CSV_SOURCE, import_google_contacts_csv
+from match_my_contacts.contacts.service import (
+    GOOGLE_CSV_SOURCE,
+    _split_google_csv_multi_value,
+    import_google_contacts_csv,
+)
 from match_my_contacts.contacts.sources import SOURCE_BEHAVIOR_SNAPSHOT_IMPORT
 from match_my_contacts.contacts.storage import ContactsRepository
 
@@ -118,6 +122,14 @@ def test_import_google_contacts_csv_rejects_legacy_schema(tmp_path: Path) -> Non
         assert "Unsupported contacts CSV" in str(exc)
     else:
         raise AssertionError("Expected legacy CSV schema to be rejected")
+
+
+def test_split_google_csv_multi_value_splits_and_strips_entries() -> None:
+    assert _split_google_csv_multi_value("alpha ::: beta:::  gamma  ") == [
+        "alpha",
+        "beta",
+        "gamma",
+    ]
 
 
 def repository_contact(source_contact_id: str, display_name: str, email: str):

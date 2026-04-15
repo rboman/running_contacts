@@ -229,6 +229,8 @@ def _google_csv_row_to_contact_record(
         row_number=row_number,
     )
     organization = _extract_google_csv_organization(row)
+    # The real Google export splits personal names across first/middle/last,
+    # so we keep first+middle together in given_name.
     given_name = " ".join(
         part for part in [row.get("First Name"), row.get("Middle Name")] if part
     ).strip() or None
